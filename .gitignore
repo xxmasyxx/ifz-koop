@@ -1,0 +1,11 @@
+bin/
+obj/
+*.user
+.vs/
+dist/
+*.log
+
+# interne Arbeitsnotizen und Analysen (nicht öffentlich)
+docs-helfer/
+DESIGN.md
+SYNC-ANALYSE.md

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    IFZ Koop Updater: BepInEx-5-Preloader-Patcher (liegt in BepInEx\patchers\IfzCoop\).
+    Läuft beim Spielstart vor den Mods, schaut auf GitHub nach der neuesten Version und
+    ersetzt IfzCoop.dll, bevor sie geladen wird. Ohne Internet startet das Spiel einfach mit der alten Version.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AssemblyName>IfzCoop.Updater</AssemblyName>
+    <RootNamespace>IfzCoop.Updater</RootNamespace>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <Version>1.0.0</Version>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <TestGameDir Condition="'$(TestGameDir)' == ''">C:\IFZ-Test</TestGameDir>
+    <BepInExCoreDir Condition="'$(BepInExCoreDir)' == ''">$(TestGameDir)\BepInEx\core</BepInExCoreDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="BepInEx">
+      <HintPath>$(BepInExCoreDir)\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Mono.Cecil">
+      <HintPath>$(BepInExCoreDir)\Mono.Cecil.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,75 @@
+IFZ Koop - Koop-Mod fuer Infection Free Zone
+=============================================
+
+Installieren
+  1. Diesen Ordner irgendwohin entpacken (alle Dateien zusammenlassen).
+  2. Doppelklick auf IfzCoop-Installer.bat, dann "1" (Installieren).
+     Windows zeigt eventuell "Der Computer wurde durch Windows geschuetzt":
+     auf "Weitere Informationen" und dann "Trotzdem ausfuehren" klicken.
+  3. Der Installer findet das Spiel ueber Steam selbst, laedt BepInEx (Mod-Lader)
+     und legt den Mod ins Spiel.
+
+Updates (ab 0.23.1)
+  - Kommen von selbst: Beim Spielstart holt der Mod die neueste Version von
+    https://github.com/xxmasyxx/ifz-koop (Pruefsumme wird geprueft). Ohne Internet
+    startet das Spiel mit der installierten Version.
+  - Neueste Version zum Weitergeben: https://github.com/xxmasyxx/ifz-koop/releases/latest/download/IfzCoop.zip
+  - Ausschalten: BepInEx\config\ifzcoop-update.cfg, Zeile "AutoUpdate = false".
+
+Spielen (ab 0.22.0 alles im Spielmenue, das alte F6-Fenster gibt es nicht mehr)
+  - Spiel ganz normal ueber Steam starten.
+  - Unten im Hauptmenue sind 8 Spieler-Kacheln. Klick auf "+" = Freund ueber Steam einladen.
+  - Der Gast nimmt die Einladung an und wartet im Hauptmenue. Er sieht dieselben Kacheln und rechts
+    oben, was der Host gerade auswaehlt (Stadt, Kartengroesse, Schwierigkeit, Einstellungen).
+  - "Mehrspieler" in der Knopfleiste links: Spielmodus (Koop/Versus), Einstellungen,
+    Direktverbindung ohne Steam. Gaeste sehen alles, aendern kann nur der Host.
+  - "Meine Farbe" (im Mehrspieler-Fenster oder Klick auf die eigene Kachel): jeder waehlt seine
+    Spielerfarbe selbst, auch Gaeste. "Automatisch" = Farbe nach Reihenfolge, "Farbrad ..." = Farbe frei
+    waehlen (nur Gruen und sehr blasse/dunkle Farben gehen nicht, die bedeuten im Spiel "freier/untaetiger Trupp").
+  - Der Host startet ein neues Spiel oder laedt einen Spielstand. Die Gaeste kommen automatisch nach.
+  - Koop, neues Spiel: Die Gaeste sind schon bei der HQ-Wahl dabei. Nur der Host bestaetigt das HQ,
+    ein Klick des Gastes auf ein Haus zeigt allen "Name schlaegt vor". Nach der Wahl laden die Gaeste
+    kurz neu.
+  - Im Spiel: Das Esc-Menue zeigt dieselben Kacheln (Leute nachholen) und "Mehrspieler".
+  - Beide brauchen dieselbe Spielversion und dieselbe Mod-Version.
+
+Versus (Test)
+  - Im Mehrspieler-Fenster Spielmodus "Versus" waehlen, Freunde einladen, neues Spiel starten.
+    Bei der HQ-Wahl wechseln alle automatisch in die Versus-Runde.
+  - Jeder hat seine eigene Basis in derselben Stadt und waehlt heimlich sein HQ (mind. 150 m Abstand).
+  - Pause und Vorspulen per Abstimmung: es geht erst los, wenn alle es angeklickt haben
+    (oben steht z. B. "1 von 3 wollen vorspulen"). Play von einem Spieler = alle wieder normal.
+  - Noch nicht fertig: fremde Trupps sehen, Kaempfe zwischen Spielern, Handel und Buendnisse.
+
+Fehler melden (F8)
+  - F8 druecken, sobald ein Fehler auftritt: Log, Zustand und Bildschirmfoto werden sofort gemerkt.
+  - Im Fenster kurz beschreiben, was passiert ist, dann "Speichern".
+  - Gespeichert in <Spielordner>\BepInEx\IfzCoop-Fehlerberichte. Beim Gast geht der Bericht
+    zusaetzlich an den Host und liegt dort im selben Ordner.
+  - Im Fenster gibt es auch "Kamera freigeben", falls die Kamera haengt.
+
+Entwickler-Menue (F7)
+  - Fuer den Host und im Einzelspiel. Gaeste nur, wenn der Host unter "Mehrspieler"
+    "Gaeste: Entwickler-Menue" auf "An" stellt (der Host fuehrt ihre Klicks aus).
+  - Reiter: Schalter | Lager & Waffen | Basis & Bewohner | Forschung | Trupps & Kampf | Welt & Zeit.
+  - Schalter (bleiben an): Sofort bauen, Schnell bauen, Schnell forschen, Forschung kostenlos,
+    Schnell pluendern, Unendlich Munition, Kein Hunger, Perfekte Stimmung, Perfektes Wetter.
+  - Oben steht immer, was gerade an ist, dazu ein Suchfeld. Rote Knoepfe fragen nach.
+  - Ausserdem: Rohstoffe/Waffen ins Lager, Forschung fertig, alle Haeuser pluendern, Verstecke
+    aufdecken, Horden toeten, Missionen erledigen, jetzt speichern, Uhrzeit setzen.
+
+Statistik (ab 0.23.0)
+  - Esc-Menue, Knopf "Statistik": je Spieler Getoetet, Schaden, Verluste, Gebaut, Abgerissen,
+    Repariert, Trupps ausgebildet, Befehle. Kaempfe zaehlen fuer den, der den Trupp zuletzt
+    gesteuert hat. Gilt fuer die laufende Sitzung.
+  - Abschalten oder andere Taste: BepInEx\config\de.ifzcoop.cfg, Abschnitt [Entwickler].
+
+Ohne Mod spielen
+  - Installer starten, "3" (Mod ausschalten). Wieder an mit "4".
+
+Entfernen
+  - Installer starten, "5" (Entfernen). Danach ist das Spiel wieder im Originalzustand.
+
+Probleme
+  - Protokoll des Installers: IfzCoop-Installer.log (in diesem Ordner)
+  - Protokoll im Spiel: <Spielordner>\BepInEx\LogOutput.log
