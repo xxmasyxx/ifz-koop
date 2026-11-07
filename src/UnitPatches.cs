@@ -802,6 +802,8 @@ namespace IfzCoop
         {
             try { Plugin.Instance?.Session?.HostOnSaveStarted(directoryName, __result); }
             catch (Exception e) { Plugin.Log.LogDebug("Speichern-Hinweis: " + e.Message); }
+            try { SaveExtras.OnSave(directoryName, __result); }
+            catch (Exception e) { Plugin.Log.LogDebug("Spielstand-Zusatz: " + e.Message); }
         }
         // AreaWork.UpdateProfit(): beim Gast Restmenge des Hosts (Anzeige „Gesammelte Ressourcen“)
         private static void AreaProfitPostfix(Gameplay.Units.Workers.AreaWork __instance)

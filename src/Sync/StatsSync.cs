@@ -66,6 +66,39 @@ namespace IfzCoop.Sync
 
         public void ResendAll() => _sentSig = null;
 
+        /// <summary>Für die Spielstand-Zusatzdatei (SaveExtras): Werte und Namen je Spieler.</summary>
+        public Dictionary<string, float[]> ExportValues()
+        {
+            var d = new Dictionary<string, float[]>();
+            foreach (var kv in _values) d[kv.Key.ToString(System.Globalization.CultureInfo.InvariantCulture)] = (float[])kv.Value.Clone();
+            return d;
+        }
+
+        public Dictionary<string, string> ExportNames()
+        {
+            var d = new Dictionary<string, string>();
+            foreach (var kv in _names) d[kv.Key.ToString(System.Globalization.CultureInfo.InvariantCulture)] = kv.Value;
+            return d;
+        }
+
+        public void Import(Dictionary<string, float[]> values, Dictionary<string, string> names)
+        {
+            _values.Clear();
+            if (values != null)
+                foreach (var kv in values)
+                    if (ulong.TryParse(kv.Key, out var id) && kv.Value != null)
+                    {
+                        var arr = new float[StatCount];
+                        System.Array.Copy(kv.Value, arr, System.Math.Min(StatCount, kv.Value.Length));
+                        _values[id] = arr;
+                    }
+            if (names != null)
+                foreach (var kv in names)
+                    if (ulong.TryParse(kv.Key, out var id) && !string.IsNullOrEmpty(kv.Value) && !_names.ContainsKey(id))
+                        _names[id] = kv.Value;
+            _sentSig = null; // gleich an die Gäste
+        }
+
         private bool Counting => _session.Role != Role.Guest && GameAccess.IsGameStarted;
 
         private ulong Me => _session.MyId.m_SteamID;

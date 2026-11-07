@@ -339,6 +339,16 @@ namespace IfzCoop
                 case "sqweapon":
                 case "sqgear":
                     return SquadCmd(a);
+                case "sqammo":
+                {
+                    var groups = SquadsById(a[1].Split(',')).ToList();
+                    if (groups.Count == 0) return "Trupp nicht gefunden";
+                    int k = 0;
+                    foreach (var g in groups)
+                        foreach (var c in g.Characters)
+                            if (c?.ItemsContainer?.AmmunitionHandler?.Ammunition != null) { c.ItemsContainer.AmmunitionHandler.Ammunition.SetQuantity(100f); k++; }
+                    return $"Munition aufgefüllt: {k} Figuren ({string.Join(", ", groups.Select(g => SquadName(g.Id)))})";
+                }
                 case "healsel":
                 {
                     var groups = SquadsById(a[1].Split(',')).ToList();
@@ -1518,7 +1528,7 @@ namespace IfzCoop
             Btn("Munition auffüllen (je 100)", "ammo");
             GUILayout.EndHorizontal();
 
-            Section("Ausgewählte Trupps", "Ausgewählte heilen", "Unsterblich an", "Unsterblich aus", "Alle wieder sterblich", "Sofort töten", "Plündern schneller", "Lauftempo", "Fähigkeiten");
+            Section("Ausgewählte Trupps", "Ausgewählte heilen", "Unsterblich an", "Unsterblich aus", "Alle wieder sterblich", "Sofort töten", "Plündern schneller", "Lauftempo", "Fähigkeiten", "Munition auffüllen (diese Trupps)");
             if (!Searching)
             {
                 GUILayout.Label(_selIds.Count == 0
@@ -1533,6 +1543,7 @@ namespace IfzCoop
                 Btn("Unsterblich an", "immortal 1 " + ids);
                 Btn("Unsterblich aus", "immortal 0 " + ids);
                 GUILayout.EndHorizontal();
+                Btn("Munition auffüllen (diese Trupps)", "sqammo " + ids);
 
                 var groups = SquadsById(_selIds).ToList();
 

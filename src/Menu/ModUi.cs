@@ -18,6 +18,38 @@ namespace IfzCoop.Menu
             Windows[id] = (rect, Time.frameCount);
         }
 
+        // Eigenes Sperr-Bit (nicht PointerOverUi = 4, das schaltet das Spiel selbst per XOR um)
+        private const Cameras.GameCameraInput.BlockReason ModBlock = (Cameras.GameCameraInput.BlockReason)0x10000;
+        private static Cameras.GameCameraInput _blockedOn;
+        public static int ZoomBlocks { get; private set; }
+
+        /// <summary>Jedes Bild (Plugin.Update): Zoom der Kamera sperren, solange die Maus über einem Mod-Fenster ist.</summary>
+        public static void UpdateCameraBlock()
+        {
+            Cameras.GameCameraInput gci = null;
+            try { gci = Cameras.GameCamera.Active != null ? Cameras.GameCamera.Active.Input as Cameras.GameCameraInput : null; }
+            catch { }
+            bool over = gci != null && MouseOverWindow();
+            try
+            {
+                if (_blockedOn != null && (!over || !ReferenceEquals(_blockedOn, gci)))
+                {
+                    if ((ReasonOf(_blockedOn) & ModBlock) != 0) _blockedOn.UnblockCameraZoom(ModBlock);
+                    _blockedOn = null;
+                }
+                if (over && _blockedOn == null)
+                {
+                    if ((ReasonOf(gci) & ModBlock) == 0) gci.BlockCameraZoom(ModBlock);
+                    _blockedOn = gci;
+                    ZoomBlocks++;
+                }
+            }
+            catch { _blockedOn = null; }
+        }
+
+        private static Cameras.GameCameraInput.BlockReason ReasonOf(Cameras.GameCameraInput gci) =>
+            HarmonyLib.Traverse.Create(gci).Field("_zoomBlockReason").GetValue<Cameras.GameCameraInput.BlockReason>();
+
         public static bool MouseOverWindow()
         {
             if (Windows.Count == 0) return false;

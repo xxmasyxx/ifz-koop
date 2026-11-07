@@ -202,7 +202,7 @@ namespace IfzCoop.Menu
             }
 
             GUILayout.Space(10f);
-            GUILayout.Label("Kämpfe zählen für den, der den Trupp zuletzt gesteuert hat. Gilt für diese Sitzung (seit dem Laden).", _title);
+            GUILayout.Label("Kämpfe zählen für den, der den Trupp zuletzt gesteuert hat. Wird mit dem Spielstand gespeichert.", _title);
             GUILayout.BeginHorizontal();
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("Schließen", GUILayout.Width(140f), GUILayout.Height(30f)))
