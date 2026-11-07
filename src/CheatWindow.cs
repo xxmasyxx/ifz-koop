@@ -1064,9 +1064,9 @@ namespace IfzCoop
             Section("Fahrzeug erzeugen", "Fahrzeug erzeugen", "Panzer", "Bus", "Lastwagen", "Panzerwagen");
             if (Searching && !VehicleTypes.Any(t => Match(t.label)) && !Match("Fahrzeug erzeugen")) return;
             _spawnIdx = GUILayout.SelectionGrid(Mathf.Clamp(_spawnIdx, 0, VehicleTypes.Length - 1), VehicleTypes.Select(t => t.label).ToArray(), 5);
-            if (GUILayout.Button("„" + VehicleTypes[_spawnIdx].label + "“ erzeugen: dann auf die Karte klicken"))
+            if (GUILayout.Button("„" + VehicleTypes[_spawnIdx].label + "“ erzeugen: danach einmal auf die Karte klicken"))
                 StartSpawnCursor(VehicleTypes[_spawnIdx].type);
-            if (!Searching) GUILayout.Label("Jeder Linksklick auf die Karte setzt ein Fahrzeug, Rechtsklick beendet. Das Fahrzeug steht danach herrenlos da: mit einem Trupp einsteigen.", _hint);
+            if (!Searching) GUILayout.Label("Knopf drücken, dann einmal auf die Karte klicken = ein Fahrzeug (Rechtsklick bricht ab). Für das nächste wieder den Knopf. Das Fahrzeug steht herrenlos da: mit einem Trupp einsteigen.", _hint);
         }
 
         private void StartSpawnCursor(Gameplay.Vehicles.VehicleType type)
@@ -1074,9 +1074,21 @@ namespace IfzCoop
             var inv = System.Globalization.CultureInfo.InvariantCulture;
             try
             {
+                // Genau ein Fahrzeug je Knopfdruck. Der Klick auf den Knopf selbst (kommt im Spiel als Loslassen an) und
+                // Klicks ins Entwickler-Fenster zählen nicht (Bericht 2026-11-07: Panzer unter dem Fenster, jeder Klick einer).
+                float armedAt = Time.realtimeSinceStartup + 0.35f;
+                int startFrame = Time.frameCount;
+                bool done = false;
                 GameInput.CursorsManager.SelectCursor(new GameInput.Debug.InstantiateObjectCursor(pos =>
-                    Run($"vspawn {(int)type} {pos.x.ToString("0.##", inv)} {pos.y.ToString("0.##", inv)} {pos.z.ToString("0.##", inv)}")));
-                _last = "Auf die Karte klicken (Rechtsklick = fertig)";
+                {
+                    if (done || Time.frameCount <= startFrame + 1 || Time.realtimeSinceStartup < armedAt) return;
+                    var mouse = new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
+                    if (Visible && _rect.Contains(mouse)) return;
+                    done = true;
+                    Run($"vspawn {(int)type} {pos.x.ToString("0.##", inv)} {pos.y.ToString("0.##", inv)} {pos.z.ToString("0.##", inv)}");
+                    try { GameInput.CursorsManager.SelectDefaultCursor(); } catch { }
+                }));
+                _last = "„" + VehicleLabel(type) + "“: jetzt einmal auf die Karte klicken (Rechtsklick = abbrechen)";
             }
             catch (Exception e)
             {
