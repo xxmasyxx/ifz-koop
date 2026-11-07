@@ -186,6 +186,19 @@ namespace IfzCoop
                     if (qty <= 0f || qty > 100000f) return "Menge?";
                     return Give(id, qty, LabelOf(id));
                 }
+                case "take":
+                {
+                    var id = (ResourceID)Enum.Parse(typeof(ResourceID), a[1]);
+                    float qty = float.Parse(a[2], inv);
+                    if (qty <= 0f || qty > 100000f) return "Menge?";
+                    var stock = GameAccess.Game<StockroomsController>();
+                    if (stock?.Container == null) return "Kein Lager gefunden";
+                    float have = stock.Container.Resources.TryGetValue(id, out var h) ? h : 0f;
+                    if (have <= 0f) return LabelOf(id) + ": nichts im Lager";
+                    float take = Mathf.Min(have, qty);
+                    stock.Container.TryRemoveResource(id, take, removeAllIfNeed: true);
+                    return $"{LabelOf(id)} −{take:0} (im Lager jetzt {Mathf.Max(0f, have - take):0})";
+                }
                 case "giveall":
                 {
                     float qty = float.Parse(a[1], inv);
@@ -1224,8 +1237,12 @@ namespace IfzCoop
             {
                 GUILayout.BeginHorizontal();
                 for (int j = i; j < i + 4 && j < shown.Length; j++)
-                    if (IconButton(ResIcon(shown[j].id), shown[j].label + "\n+" + Amount, $"{shown[j].label}: {Amount} ins Lager legen", 140f))
-                        Run($"give {shown[j].id} {Amount}");
+                {
+                    int click = IconButton2(ResIcon(shown[j].id), shown[j].label + "\n±" + Amount,
+                        $"{shown[j].label}: Linksklick +{Amount} ins Lager, Rechtsklick −{Amount} aus dem Lager", 140f);
+                    if (click == 1) Run($"give {shown[j].id} {Amount}");
+                    else if (click == 2) Run($"take {shown[j].id} {Amount}");
+                }
                 GUILayout.EndHorizontal();
             }
         }
@@ -1307,6 +1324,45 @@ namespace IfzCoop
             float w = r.width, h = r.height;
             if (aspect > r.width / Mathf.Max(1f, r.height)) h = w / aspect; else w = h * aspect;
             GUI.DrawTextureWithTexCoords(new Rect(r.x + (r.width - w) / 2f, r.y + (r.height - h) / 2f, w, h), s.texture, uv, true);
+        }
+
+        /// <summary>Wie IconButton, aber unterscheidet Links- (1) und Rechtsklick (2); 0 = nichts.</summary>
+        private int IconButton2(Sprite icon, string text, string tooltip, float width)
+        {
+            var e = Event.current;
+            // Rechtsklick selbst erkennen (Platz des nächsten Knopfes ist erst nach GetRect bekannt, darum vorher merken)
+            bool right = e.type == EventType.MouseDown && e.button == 1;
+            Vector2 mouse = e.mousePosition;
+            int before = GUIUtility.hotControl;
+            var r = GUILayoutUtility.GetRect(width, 46f, GUILayout.Width(width), GUILayout.Height(46f));
+            if (right && r.Contains(mouse))
+            {
+                e.Use();
+                return 2;
+            }
+            bool clicked = DrawIconButtonAt(r, icon, text, tooltip, true);
+            return clicked && e.button == 0 ? 1 : 0;
+        }
+
+        private bool DrawIconButtonAt(Rect r, Sprite icon, string text, string tooltip, bool enabled)
+        {
+            if (_iconText == null)
+                _iconText = new GUIStyle(GUI.skin.label) { fontSize = 12, alignment = TextAnchor.MiddleLeft, wordWrap = true };
+            bool old = GUI.enabled;
+            GUI.enabled = old && enabled;
+            bool clicked = GUI.Button(r, new GUIContent("", tooltip));
+            float textX = r.x + 6f;
+            if (icon != null)
+            {
+                var c = GUI.color;
+                if (!GUI.enabled) GUI.color = new Color(1f, 1f, 1f, 0.35f);
+                DrawSprite(new Rect(r.x + 4f, r.y + 4f, 38f, 38f), icon);
+                GUI.color = c;
+                textX = r.x + 46f;
+            }
+            GUI.Label(new Rect(textX, r.y + 2f, r.xMax - textX - 4f, r.height - 4f), text, _iconText);
+            GUI.enabled = old;
+            return clicked;
         }
 
         /// <summary>Knopf mit Spielbild links und Text rechts; der Hinweis erscheint beim Drüberfahren.</summary>
