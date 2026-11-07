@@ -903,6 +903,7 @@ namespace IfzCoop
             return value;
         }
 
+        private string _lastSelKey = "", _lastVehKey = "";
         private float _scavPct = 100f;
         private float _walkPct = 200f;
         private float _speedPct = 200f;
@@ -1076,6 +1077,17 @@ namespace IfzCoop
             foreach (var g in SquadsById(new[] { id }))
                 return string.IsNullOrEmpty(g.GroupName) ? id : g.GroupName;
             return id;
+        }
+
+        /// <summary>Name plus, was für diesen Trupp gerade gilt (unsterblich, Sofort töten, Tempo).</summary>
+        private static string SquadWithState(string id)
+        {
+            var s = new List<string>();
+            if (Immortal.Contains(id)) s.Add("unsterblich");
+            if (OneHit.Contains(id)) s.Add("Sofort töten");
+            if (ScavBoost.TryGetValue(id, out var f1)) s.Add("Plündern +" + ((f1 - 1f) * 100f).ToString("0") + " %");
+            if (WalkBoost.TryGetValue(id, out var f2)) s.Add("Lauftempo " + (f2 * 100f).ToString("0") + " %");
+            return SquadName(id) + (s.Count > 0 ? " <color=#ffd24a>(" + string.Join(", ", s) + ")</color>" : "");
         }
 
         private static int HealGroups(IEnumerable<Group> groups)
@@ -1578,7 +1590,11 @@ namespace IfzCoop
         private void DrawSquads()
         {
             Section("Trupps", "Alle Trupps heilen", "Munition auffüllen (je 100)");
-            if (!Searching) GUILayout.Label("Trupps: " + (GameAccess.Game<SquadsController>()?.Squads?.Count ?? 0));
+            if (!Searching)
+            {
+                var all = GameAccess.Game<SquadsController>()?.Squads;
+                GUILayout.Label("Trupps insgesamt: " + (all?.Count ?? 0) + (all != null && all.Count > 0 ? "  (" + string.Join(", ", all.Where(g => g != null).Select(g => SquadName(g.Id) + (Immortal.Contains(g.Id) ? " ♥" : ""))) + ")" : ""), _onStyle);
+            }
             GUILayout.BeginHorizontal();
             Btn("Alle Trupps heilen", "heal");
             Btn("Munition auffüllen (je 100)", "ammo");
@@ -1589,7 +1605,7 @@ namespace IfzCoop
             {
                 GUILayout.Label(_selIds.Count == 0
                     ? "Ausgewählt: keiner (Trupp im Spiel anklicken, mit Umschalt mehrere)"
-                    : "Ausgewählt: " + string.Join(", ", _selIds.Select(SquadName)));
+                    : "Ausgewählt: " + string.Join(", ", _selIds.Select(SquadWithState)), _onStyle);
             }
             if (_selIds.Count > 0)
             {
@@ -1602,6 +1618,24 @@ namespace IfzCoop
                 Btn("Munition auffüllen (diese Trupps)", "sqammo " + ids);
 
                 var groups = SquadsById(_selIds).ToList();
+
+                // Regler auf die echten Werte des gewählten Trupps setzen, sobald die Auswahl wechselt
+                // (vorher zeigten sie den zuletzt eingestellten Wert eines anderen Trupps)
+                string selKey = string.Join(",", _selIds);
+                if (selKey != _lastSelKey)
+                {
+                    _lastSelKey = selKey;
+                    float sc = 0f, wk = 100f;
+                    foreach (var g in groups)
+                    {
+                        if (ScavBoost.TryGetValue(g.Id, out var f1)) sc = (f1 - 1f) * 100f;
+                        if (WalkBoost.TryGetValue(g.Id, out var f2)) wk = f2 * 100f;
+                    }
+                    _scavPct = Mathf.Round(sc);
+                    _walkPct = Mathf.Round(wk);
+                    _numText.Remove("scav");
+                    _numText.Remove("walk");
+                }
 
                 // Sofort töten nur für diese Trupps
                 if (Match("Sofort töten"))
@@ -1727,6 +1761,12 @@ namespace IfzCoop
                 if (Match("Tempo") || Match("Geschwindigkeit"))
                 {
                     float curSpeed = SpeedBoost.TryGetValue(v.Id, out var sf) ? sf * 100f : 100f;
+                    if (v.Id != _lastVehKey)
+                    {
+                        _lastVehKey = v.Id;
+                        _speedPct = Mathf.Round(curSpeed);
+                        _numText.Remove("speed");
+                    }
                     GUILayout.BeginHorizontal();
                     GUILayout.Label("Tempo:", GUILayout.Width(60f));
                     _speedPct = SliderField("speed", _speedPct, 50f, 500f, 2000f, 220f);
