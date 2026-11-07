@@ -350,6 +350,17 @@ namespace IfzCoop
             // an und nie ab (Spielfehler, im Koop öfter ausgelöst) → Zahlen anderer Häuser/Trupps springen hinein.
             // Immer den Fortschritt des Hauses zeigen, in dem der angezeigte Trupp gerade ist.
             TryPatch(harmony, typeof(UI.InfoPanels.SquadPanelInfo), "UpdateScavengeProgress", nameof(ScavProgressPrefix));
+            // Lager-Fenster: ein Rohstoff ohne Spieldaten ließ RefreshUI abstürzen, Tauschen mit dem Lager hing dann
+            // (Bericht 2026-11-07). Fehler abfangen, damit der Tausch weiterläuft.
+            try
+            {
+                foreach (var m in AccessTools.GetDeclaredMethods(typeof(UI.InfoPanels.StoragePanel)).Where(x => x.Name == "RefreshUI"))
+                {
+                    harmony.Patch(m, finalizer: new HarmonyMethod(typeof(UnitPatches), nameof(StorageRefreshFinalizer)));
+                    Applied++;
+                }
+            }
+            catch (Exception e) { Plugin.Log.LogWarning("IFZCOOP StoragePanel-Schutz nicht gesetzt: " + e.Message); }
             // Entwickler-Menü: unsterbliche Trupps (CheatWindow.Immortal) bekommen keinen Lebenspunkt abgezogen
             TryPatch(harmony, typeof(Character), "SubtractHp", nameof(ImmortalPrefix));
             TryPatch(harmony, typeof(SquadsCreator), "ReplenishGroup", nameof(LocalSquadCreationPrefix));
@@ -446,6 +457,16 @@ namespace IfzCoop
             var s = CurrentSession;
             if (s != null && s.Role != Role.Guest && !UnitSync.NetApplying)
                 s.Stats?.AddForActor(Sync.StatsSync.Stat.Squads);
+        }
+
+        public static int StorageErrorsCaught;
+
+        private static Exception StorageRefreshFinalizer(Exception __exception)
+        {
+            if (__exception == null) return null;
+            if (StorageErrorsCaught++ < 3)
+                Plugin.Log.LogWarning("IFZCOOP Lager-Fenster: Fehler abgefangen (Tauschen läuft weiter): " + __exception.Message);
+            return null;
         }
 
         public static int ScavProgressFixed;

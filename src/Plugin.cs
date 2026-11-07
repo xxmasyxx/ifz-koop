@@ -12,7 +12,7 @@ namespace IfzCoop
     {
         public const string Guid = "de.ifzcoop";
         public const string Name = "IFZ Koop";
-        public const string Version = "0.23.10";
+        public const string Version = "0.23.11";
 
         internal static Plugin Instance;
         internal static ManualLogSource Log;
@@ -125,6 +125,25 @@ namespace IfzCoop
             }
         }
 
+        // Einmal je geladenem Spiel: Rohstoffe ohne Spieldaten aus dem Lager (alte F7-Fehler, sonst hängt Tauschen)
+        private bool _stockChecked;
+        private float _stockCheckAt;
+
+        private void CheckStockOnce()
+        {
+            if (!IfzCoop.Game.GameAccess.IsGameStarted) { _stockChecked = false; _stockCheckAt = 0f; return; }
+            if (_stockChecked || Session == null || Session.Role == Role.Guest) return;
+            if (_stockCheckAt == 0f) { _stockCheckAt = Time.realtimeSinceStartup + 5f; return; }
+            if (Time.realtimeSinceStartup < _stockCheckAt) return;
+            _stockChecked = true;
+            try
+            {
+                var r = CheatWindow.CleanStock();
+                if (r.Count > 0) Session.ShowNotice("Lager repariert: unbekannte Rohstoffe entfernt (" + string.Join(", ", r) + ")", 8f);
+            }
+            catch (Exception e) { Log.LogWarning("Lager prüfen: " + e.Message); }
+        }
+
         private void ShowUpdateNoteInMenu()
         {
             if (_updateNote == null || Time.realtimeSinceStartup < _updateNoteCheck) return;
@@ -174,6 +193,7 @@ namespace IfzCoop
                 ShowUpdateNoteInMenu();
                 if (CheatWindow.Immortal.Count > 0 && !IfzCoop.Game.GameAccess.IsGameStarted)
                     CheatWindow.Immortal.Clear(); // gilt nur für das laufende Spiel
+                CheckStockOnce();
                 Menu.NoticeUi.Update();
             }
             catch (Exception e)

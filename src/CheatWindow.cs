@@ -190,7 +190,7 @@ namespace IfzCoop
                 {
                     float qty = float.Parse(a[1], inv);
                     if (qty <= 0f || qty > 100000f) return "Menge?";
-                    foreach (var x in Food.Concat(Materials).Concat(Combat)) Give(x.id, qty, null);
+                    foreach (var x in Food.Concat(Materials).Concat(Combat)) if (HasResData(x.id)) Give(x.id, qty, null);
                     return $"Alles je +{qty}";
                 }
                 case "research":
@@ -257,6 +257,11 @@ namespace IfzCoop
                 }
                 case "bld":
                     return BuildingCmd(a[1], long.Parse(a[2], inv));
+                case "fixstock":
+                {
+                    var r = CleanStock();
+                    return r.Count == 0 ? "Lager ist in Ordnung" : "Aus dem Lager entfernt: " + string.Join(", ", r);
+                }
                 case "vmod":
                 case "vfix":
                 case "vspawn":
@@ -609,7 +614,7 @@ namespace IfzCoop
                 case "finish":
                     if (st == Gameplay.Rebuilding.StateMachine.StructureStateType.Constructing)
                     {
-                        b.StateMachine.ChangeTo(Gameplay.Rebuilding.StateMachine.StructureStateType.Completed);
+                        FinishBuilding(b);
                         return $"Haus {id} fertig gebaut";
                     }
                     return $"Haus {id} wird gerade nicht gebaut ({st})";
@@ -794,7 +799,7 @@ namespace IfzCoop
 
         private void DrawGrid(string title, (string label, ResourceID id)[] items)
         {
-            var shown = items.Where(x => Match(x.label)).ToArray();
+            var shown = items.Where(x => Match(x.label) && HasResData(x.id)).ToArray();
             if (shown.Length == 0) return;
             Section(title, shown.Select(x => x.label).ToArray());
             for (int i = 0; i < shown.Length; i += 4)
@@ -949,11 +954,43 @@ namespace IfzCoop
             }
         }
 
+        /// <summary>
+        /// Kennt das Spiel diesen Rohstoff (Bild, Daten)? Ohne Daten stürzt das Lager-Fenster ab und Tauschen mit dem
+        /// Lager hängt (Bericht 2026-11-07: Panzer-Munition/Flammenwerfer über F7 ins Lager gelegt).
+        /// </summary>
+        public static bool HasResData(ResourceID id)
+        {
+            try { return Data.Resorces.ResourcesDataContainer.Instance?.GetResourceDataByType(id) != null; }
+            catch { return false; }
+        }
+
+        /// <summary>Rohstoffe ohne Spieldaten aus dem Lager entfernen. Rückgabe: entfernte Namen.</summary>
+        public static List<string> CleanStock()
+        {
+            var removed = new List<string>();
+            var stock = GameAccess.Game<StockroomsController>();
+            if (stock?.Container == null || Data.Resorces.ResourcesDataContainer.Instance == null) return removed;
+            foreach (var kv in stock.Container.Resources.ToList())
+            {
+                if (kv.Value <= 0f || HasResData(kv.Key)) continue;
+                try
+                {
+                    stock.Container.TryRemoveResource(kv.Key, kv.Value, removeAllIfNeed: true);
+                    removed.Add(kv.Key + " (" + kv.Value.ToString("0") + ")");
+                }
+                catch (Exception e) { Plugin.Log.LogWarning("Lager reparieren " + kv.Key + ": " + e.Message); }
+            }
+            if (removed.Count > 0) Plugin.Log.LogWarning("IFZCOOP Lager repariert, entfernt: " + string.Join(", ", removed));
+            return removed;
+        }
+
         private static string Give(ResourceID id, float qty, string label)
         {
             var stock = GameAccess.Game<StockroomsController>();
             if (stock?.Container == null)
                 return "Kein Lager gefunden";
+            if (!HasResData(id))
+                return (label ?? id.ToString()) + ": kennt das Spiel nicht als Lager-Rohstoff";
             stock.Container.ForceAddResource(id, qty, ResourceAddReason.None);
             return $"{label ?? id.ToString()} +{qty}";
         }
@@ -1151,6 +1188,24 @@ namespace IfzCoop
             Btn("Laufende Missionen erledigen", "missions", danger: true);
         }
 
+        /// <summary>
+        /// Baustelle wie das Spiel selbst fertigstellen (Building.AdaptImmediately: BuildImmediately → Arbeit erledigt →
+        /// Spiel wechselt auf „fertig“ mit allen Fertig-Schritten). Früher direkt ChangeTo(Completed): dabei fehlten
+        /// Schritte, ein Umbau wurde z. B. zum Lager statt zum gewählten Gebäude (Bericht 2026-11-07).
+        /// </summary>
+        private static void FinishBuilding(Gameplay.Buildings.Building b)
+        {
+            var w = b.BuildStructureWork;
+            if (w != null && !w.IsDone)
+            {
+                b.BuildImmediately();
+                if (b.StateMachine?.CurrentState?.StateType != Gameplay.Rebuilding.StateMachine.StructureStateType.Constructing)
+                    return;
+            }
+            if (b.StateMachine?.CurrentState?.StateType == Gameplay.Rebuilding.StateMachine.StructureStateType.Constructing)
+                b.StateMachine.ChangeTo(Gameplay.Rebuilding.StateMachine.StructureStateType.Completed);
+        }
+
         /// <summary>Alle laufenden Baustellen fertig. Rückgabe: Anzahl.</summary>
         private static int FinishAllConstruction()
         {
@@ -1165,7 +1220,7 @@ namespace IfzCoop
                     {
                         try
                         {
-                            b.StateMachine.ChangeTo(Gameplay.Rebuilding.StateMachine.StructureStateType.Completed);
+                            FinishBuilding(b);
                             n++;
                         }
                         catch (Exception e) { Plugin.Log.LogDebug($"Sofort bauen Haus {b.ID}: {e.Message}"); }
