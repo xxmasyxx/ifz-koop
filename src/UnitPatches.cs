@@ -346,6 +346,10 @@ namespace IfzCoop
             // Statistik je Spieler (StatsSync): Trupp-Ausbildung, Treffer/Tod mit Angreifer
             TryPatch(harmony, typeof(SquadCreatorController), "AddCreationRequestAtStructure", nameof(StatsSquadPrefix));
             TryPatch(harmony, typeof(Character), "ReceiveDamage", nameof(StatsDamagePrefix), nameof(StatsDamagePostfix));
+            // „Plündern: x %“ im Trupp-Fenster: das Fenster meldet sich bei jedem Neuaufbau zusätzlich an der Plünder-Arbeit
+            // an und nie ab (Spielfehler, im Koop öfter ausgelöst) → Zahlen anderer Häuser/Trupps springen hinein.
+            // Immer den Fortschritt des Hauses zeigen, in dem der angezeigte Trupp gerade ist.
+            TryPatch(harmony, typeof(UI.InfoPanels.SquadPanelInfo), "UpdateScavengeProgress", nameof(ScavProgressPrefix));
             // Entwickler-Menü: unsterbliche Trupps (CheatWindow.Immortal) bekommen keinen Lebenspunkt abgezogen
             TryPatch(harmony, typeof(Character), "SubtractHp", nameof(ImmortalPrefix));
             TryPatch(harmony, typeof(SquadsCreator), "ReplenishGroup", nameof(LocalSquadCreationPrefix));
@@ -442,6 +446,29 @@ namespace IfzCoop
             var s = CurrentSession;
             if (s != null && s.Role != Role.Guest && !UnitSync.NetApplying)
                 s.Stats?.AddForActor(Sync.StatsSync.Stat.Squads);
+        }
+
+        public static int ScavProgressFixed;
+
+        // SquadPanelInfo.UpdateScavengeProgress(float percentages)
+        private static bool ScavProgressPrefix(UI.InfoPanels.SquadPanelInfo __instance, ref float percentages)
+        {
+            try
+            {
+                var g = __instance != null ? __instance.Squad : null;
+                var s = g != null ? g.GetOccupiedScavengable() : null;
+                if (g == null || s == null || g.PlayerGroupStatusHandler == null
+                    || g.PlayerGroupStatusHandler.Status != Gameplay.Units.Player.PlayerGroupStatus.Scavenging)
+                    return false; // Meldung von einem fremden Haus: nicht anzeigen
+                float mine = s.GetScavengeProgress();
+                if (Mathf.Abs(mine - percentages) > 0.0005f) ScavProgressFixed++;
+                percentages = mine;
+                return true;
+            }
+            catch
+            {
+                return true;
+            }
         }
 
         // Character.SubtractHp(float amount, SubtractionHpReason deathReason, Weapon weapon)
