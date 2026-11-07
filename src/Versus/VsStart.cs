@@ -533,16 +533,29 @@ namespace IfzCoop.Versus
                 int toMake = Mathf.Max(0, s.Squads - haveSquads);
                 if (toMake > 0)
                 {
+                    // wie das Spiel selbst Trupps baut (SquadsCreator: SquadsConfig.GroupDraft, Build ohne Hide).
+                    // Früher SpawnGroupAt(„player“): das versteckt die Gruppe (für Zombies/Banditen gedacht) → Trupp „Player“
+                    // war beim Host unsichtbar (Bericht 2026-11-07).
                     var builder = GameAccess.Game<GroupBuilder>();
-                    var config = JutsuGamesConfig.Runtime.Configs.GetConfig<Gameplay.Units.Enemy.GroupsConfig>();
-                    var draft = config?.GetDraftByName("player");
+                    var draft = JutsuGamesConfig.Runtime.Configs.GetConfig<Gameplay.Units.Player.SquadsConfig>()?.GroupDraft;
                     int made = 0;
+                    Vector3 basePos = hqPos;
+                    try
+                    {
+                        var ent = (hq as Building)?.GetEntrances();
+                        if (ent != null && ent.Length > 0) basePos = ent[0];
+                    }
+                    catch { }
                     for (int i = 0; i < toMake && builder != null && draft != null; i++)
                     {
                         float a = i * Mathf.PI * 2f / Mathf.Max(1, toMake);
-                        var pos = hqPos + new Vector3(Mathf.Cos(a) * 10f, 0f, Mathf.Sin(a) * 10f);
-                        if (builder.Clear().SpawnGroupAt(pos, draft, s.SquadSize) != null)
+                        var pos = basePos + new Vector3(Mathf.Cos(a) * 4f, 0f, Mathf.Sin(a) * 4f);
+                        var g = builder.Clear().SetCharactersCountToCreate(s.SquadSize).SetPosition(pos).Build(draft);
+                        if (g != null)
+                        {
+                            try { if (!g.IsVisible()) g.Show(); } catch { }
                             made++;
+                        }
                     }
                     sb.Append("squads ").Append(made).Append('x').Append(s.SquadSize).Append(' ');
                 }
