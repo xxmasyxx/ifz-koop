@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -441,8 +441,24 @@ namespace IfzCoop.Menu
                 () => VsS.Squads.ToString(), v => VsSet("squads", v));
             Choice("versus", "Truppgröße", new[] { "2", "3", "4", "6", "8" }, new[] { "2", "3", "4", "6", "8" },
                 () => VsS.SquadSize.ToString(), v => VsSet("squadsize", v));
+            Choice("versus", "Startausstattung", new[] { "Eigene (Werte hier)", "Wie auf der Karte" }, new[] { "1", "0" },
+                () => B(VsS.CustomStart), v => VsSet("start", v == "1" ? "custom" : "map"));
             Choice("versus", "Start-Rohstoffe", new[] { "Keine extra", "Wenig", "Normal", "Viel" }, new[] { "0", "50", "150", "500" },
                 () => ResourcePreset().ToString(), v => SetResourcePreset(int.Parse(v)));
+            Choice("versus", "Fahrzeug am HQ", VehLabels(true), VehValues(true), () => VehSlotType(0), v => SetVehSlot(0, v, null));
+            Choice("versus", "Anzahl", new[] { "1", "2", "3", "4", "5" }, new[] { "1", "2", "3", "4", "5" },
+                () => VehSlotCount(0), v => SetVehSlot(0, null, v));
+            Choice("versus", "2. Fahrzeug am HQ", VehLabels(true), VehValues(true), () => VehSlotType(1), v => SetVehSlot(1, v, null));
+            Choice("versus", "Anzahl ", new[] { "1", "2", "3", "4", "5" }, new[] { "1", "2", "3", "4", "5" },
+                () => VehSlotCount(1), v => SetVehSlot(1, null, v));
+            Choice("versus", "HQ", new[] { "Wie im Spiel (je nach Gebäude)", "Bei allen gleich (Werte unten)" }, new[] { "0", "1" },
+                () => B(VsS.HqEqual), v => VsSet("hq", v));
+            Choice("versus", "HQ Leben", new[] { "2000", "5000", "10000", "20000", "50000" }, new[] { "2000", "5000", "10000", "20000", "50000" },
+                () => VsS.HqHp.ToString(), v => VsSet("hqhp", v));
+            Choice("versus", "HQ Verstärkung (Mauern)", Versus.VsSettings.EnforcementLabels, new[] { "0", "1", "2", "3" },
+                () => VsS.HqEnforcement.ToString(), v => VsSet("hqenf", v));
+            Choice("versus", "HQ Lagerplatz (Kisten)", new[] { "200", "400", "800", "1500", "3000" }, new[] { "200", "400", "800", "1500", "3000" },
+                () => VsS.HqStorage.ToString(), v => VsSet("hqstorage", v));
             Choice("versus", "Sieg", new[] { "Letzter mit Bevölkerung", "Ohne Sieg" }, new[] { "1", "0" },
                 () => B(VsS.Victory), v => VsSet("victory", v));
             Choice("versus", "Durchsuchte Häuser", new[] { "Für alle sichtbar", "Nur eigene" }, new[] { "1", "0" },
@@ -468,6 +484,60 @@ namespace IfzCoop.Menu
         private static void VsSet(string key, string value)
         {
             if (VsS.TrySet(key, value, out _)) VsS.Revision++;
+        }
+
+        // Fahrzeuge am HQ: zwei Plätze (Art + Anzahl), gespeichert in VsSettings.Vehicles
+        private static string[] VehLabels(bool withNone)
+        {
+            var l = new List<string>();
+            if (withNone) l.Add("Keins");
+            foreach (var t in CheatWindow.VehicleTypes) l.Add(t.label);
+            return l.ToArray();
+        }
+
+        private static string[] VehValues(bool withNone)
+        {
+            var l = new List<string>();
+            if (withNone) l.Add("none");
+            foreach (var t in CheatWindow.VehicleTypes) l.Add(t.type.ToString());
+            return l.ToArray();
+        }
+
+        private static List<KeyValuePair<Gameplay.Vehicles.VehicleType, int>> VehSlots()
+        {
+            var order = CheatWindow.VehicleTypes.Select(t => t.type).ToList();
+            return VsS.Vehicles.Where(kv => kv.Value > 0).OrderBy(kv => order.IndexOf(kv.Key)).ToList();
+        }
+
+        private static string VehSlotType(int i)
+        {
+            var sl = VehSlots();
+            return i < sl.Count ? sl[i].Key.ToString() : "none";
+        }
+
+        private static string VehSlotCount(int i)
+        {
+            var sl = VehSlots();
+            return i < sl.Count ? Mathf.Clamp(sl[i].Value, 1, 5).ToString() : "1";
+        }
+
+        private static void SetVehSlot(int i, string type, string count)
+        {
+            var sl = VehSlots();
+            var slots = new List<KeyValuePair<Gameplay.Vehicles.VehicleType, int>>();
+            for (int k = 0; k < 2; k++)
+                slots.Add(k < sl.Count ? sl[k] : new KeyValuePair<Gameplay.Vehicles.VehicleType, int>((Gameplay.Vehicles.VehicleType)(-1), 1));
+            var cur = slots[i];
+            var t = cur.Key;
+            int n = cur.Value;
+            if (type != null) t = type == "none" ? (Gameplay.Vehicles.VehicleType)(-1) : (Gameplay.Vehicles.VehicleType)Enum.Parse(typeof(Gameplay.Vehicles.VehicleType), type);
+            if (count != null) n = int.Parse(count);
+            slots[i] = new KeyValuePair<Gameplay.Vehicles.VehicleType, int>(t, Mathf.Max(1, n));
+            VsS.Vehicles.Clear();
+            foreach (var kv in slots)
+                if ((int)kv.Key >= 0)
+                    VsS.Vehicles[kv.Key] = (VsS.Vehicles.TryGetValue(kv.Key, out var have) ? have : 0) + kv.Value;
+            VsS.Revision++;
         }
 
         private static int ResourcePreset()
