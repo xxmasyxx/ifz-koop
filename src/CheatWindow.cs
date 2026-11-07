@@ -305,6 +305,15 @@ namespace IfzCoop
                 case "instantmake":
                     InstantMake = a[1] == "1";
                     return InstantMake ? "Sofort herstellen AN" : "Sofort herstellen AUS";
+                case "scavall":
+                {
+                    float pct = Mathf.Clamp(float.Parse(a[1], inv), 0f, 10000f);
+                    ScavBoostAll = 1f + pct / 100f;
+                    return pct < 1f ? "Plündern für alle normal" : $"Plündern für alle +{pct:0} % schneller";
+                }
+                case "instantdemolish":
+                    InstantDemolish = a[1] == "1";
+                    return InstantDemolish ? "Sofort abbauen AN" : "Sofort abbauen AUS";
                 case "onehitall":
                     OneHitAll = a[1] == "1";
                     return OneHitAll ? "Sofort töten AN (alle Trupps)" : "Sofort töten für alle AUS";
@@ -491,6 +500,8 @@ namespace IfzCoop
             if (InstantBuild) on.Add("Sofort bauen");
             foreach (var f in FlagDefs) if (FlagOn(f.key)) on.Add(f.label);
             if (InstantMake) on.Add("Sofort herstellen");
+            if (InstantDemolish) on.Add("Sofort abbauen");
+            if (ScavBoostAll > 1.001f) on.Add($"Plündern +{(ScavBoostAll - 1f) * 100f:0} % (alle)");
             if (OneHitAll) on.Add("Sofort töten (alle)");
             else if (OneHit.Count > 0) on.Add("Sofort töten (" + OneHit.Count + (OneHit.Count == 1 ? " Trupp)" : " Trupps)"));
             if (WalkBoost.Count > 0) on.Add(WalkBoost.Count + (WalkBoost.Count == 1 ? " Trupp" : " Trupps") + " mit anderem Lauftempo");
@@ -539,8 +550,8 @@ namespace IfzCoop
                 _nextWalkRebuild = now + 2f; // neue Mitglieder, Wechsel im Trupp
                 try { RebuildWalk(); } catch { }
             }
-            if ((!InstantBuild && !InstantMake) || !Allowed || IsGuest)
-                return; // Sofort-Bauen/-Herstellen rechnet nur der Host
+            if ((!InstantBuild && !InstantMake && !InstantDemolish) || !Allowed || IsGuest)
+                return; // Sofort-Bauen/-Herstellen/-Abbauen rechnet nur der Host
             if (now < _nextInstant)
                 return;
             _nextInstant = now + InstantInterval;
@@ -549,6 +560,12 @@ namespace IfzCoop
                 int n = FinishAllConstruction();
                 if (n > 0)
                     Plugin.Log.LogInfo($"IFZCOOP Entwickler: {n} Baustellen sofort fertig");
+            }
+            if (InstantDemolish)
+            {
+                int d = DemolishAllNow();
+                if (d > 0)
+                    Plugin.Log.LogInfo($"IFZCOOP Entwickler: {d} Abbau-Arbeiten sofort fertig");
             }
             if (InstantMake)
             {
@@ -872,6 +889,8 @@ namespace IfzCoop
             if (WalkBoost.Count > 0) { WalkBoost.Clear(); WalkByMovement.Clear(); }
             InstantBuild = false;
             InstantMake = false;
+            InstantDemolish = false;
+            ScavBoostAll = 1f;
             OneHitAll = false;
             if (Immortal.Count > 0) Immortal.Clear();
             if (Indestructible.Count > 0) Indestructible.Clear();
@@ -910,6 +929,54 @@ namespace IfzCoop
 
         private static readonly HarmonyLib.AccessTools.FieldRef<Gameplay.Buildings.Building, Gameplay.Buildings.GarageHandler> GarageRef =
             HarmonyLib.AccessTools.FieldRefAccess<Gameplay.Buildings.Building, Gameplay.Buildings.GarageHandler>("GarageHandler");
+
+        /// <summary>„Sofort abbauen“: Abbau/Rückbau von Häusern und Anlagen, Fahrzeuge zerlegen in der Werkstatt.</summary>
+        public static bool InstantDemolish;
+
+        /// <summary>Plündern schneller für alle Spieler-Trupps (Faktor, 1 = normal); einzelne Trupps (ScavBoost) gehen vor.</summary>
+        public static float ScavBoostAll = 1f;
+        private float _scavAllPct = 0f;
+
+        private static int DemolishAllNow()
+        {
+            int n = 0;
+            var works = new List<Gameplay.Units.Workers.WorkSystem.Works.DisassembleWork>();
+            var bc = GameAccess.Game<BuildingsController>();
+            if (bc?.Buildings != null)
+                foreach (var b in bc.Buildings)
+                {
+                    if (b == null) continue;
+                    if (b.DeconstructWork != null && !b.DeconstructWork.IsDone) works.Add(b.DeconstructWork);
+                    if (b.DeadaptationWork != null && !b.DeadaptationWork.IsDone) works.Add(b.DeadaptationWork);
+                }
+            foreach (var s in Sync.StructureSync.All())
+                if (s?.DeconstructWork != null && !s.DeconstructWork.IsDone) works.Add(s.DeconstructWork);
+            foreach (var w in works)
+            {
+                try
+                {
+                    // Zeit voll: beim nächsten Arbeitsschritt fallen alle Rohstoffe, danach ist der Abbau fertig
+                    if (w.TimeDeconstructing < w.TimeToDeconstruct) { w.SetTimeDeconstructing(w.TimeToDeconstruct); n++; }
+                }
+                catch (Exception e) { Plugin.Log.LogDebug("Sofort abbauen: " + e.Message); }
+            }
+            // Werkstatt: Zerlege-Aufträge sofort fertig
+            var shop = GameAccess.Game<Gameplay.Units.Workers.CarWorkshopController>();
+            if (shop != null && bc?.Buildings != null)
+                foreach (var b in bc.Buildings.ToList())
+                {
+                    try
+                    {
+                        var w = b?.CarWorkshopWork;
+                        if (w?.CurrentRequest == null || w.CurrentRequest.IsComplete || w.CurrentRequest.Type != Gameplay.Buildings.CarWorkshopRequestType.Deconstruction) continue;
+                        w.CurrentRequest.SetProgress(1f);
+                        HarmonyLib.AccessTools.Method(typeof(Gameplay.Units.Workers.CarWorkshopController), "HandleRequestCompleted").Invoke(shop, new object[] { w });
+                        n++;
+                    }
+                    catch (Exception e) { Plugin.Log.LogDebug("Sofort zerlegen: " + e.Message); }
+                }
+            return n;
+        }
 
         private static int MakeAllNow()
         {
@@ -1200,7 +1267,7 @@ namespace IfzCoop
 
         private void DrawFlags()
         {
-            Section("Dauer-Schalter (bleiben an, bis du sie ausmachst)", FlagDefs.Select(f => f.label).Concat(new[] { "Sofort bauen", "Sofort herstellen", "Sofort töten" }).ToArray());
+            Section("Dauer-Schalter (bleiben an, bis du sie ausmachst)", FlagDefs.Select(f => f.label).Concat(new[] { "Sofort bauen", "Sofort herstellen", "Sofort töten", "Sofort abbauen", "Plündern schneller" }).ToArray());
             if (Match("Sofort bauen"))
             {
                 bool now = GUILayout.Toggle(InstantBuild, " Sofort bauen  (jede Baustelle wird gleich fertig, nur in diesem Spiel)");
@@ -1212,6 +1279,22 @@ namespace IfzCoop
                 bool now = GUILayout.Toggle(OneHitAll, " Sofort töten  (jeder Treffer deiner Trupps tötet; nur in diesem Spiel)");
                 if (now != OneHitAll)
                     Run("onehitall " + (now ? "1" : "0"));
+            }
+            if (Match("Plündern schneller"))
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(" Plündern schneller (alle Trupps): +", GUILayout.Width(230f));
+                _scavAllPct = SliderField("scavall", _scavAllPct, 0f, 500f, 10000f, 160f);
+                if (GUILayout.Button(new GUIContent("Übernehmen", "Gilt für alle Trupps ohne eigene Einstellung. 0 % = normal. „Schnell plündern“ oben = sofort."), GUILayout.Width(100f)))
+                    Run("scavall " + _scavAllPct.ToString("0", System.Globalization.CultureInfo.InvariantCulture));
+                GUILayout.EndHorizontal();
+                if (!Searching) GUILayout.Label(ScavBoostAll > 1.001f ? $"   Jetzt: +{(ScavBoostAll - 1f) * 100f:0} % für alle" : "   Jetzt: normal", _hint);
+            }
+            if (Match("Sofort abbauen"))
+            {
+                bool now = GUILayout.Toggle(InstantDemolish, " Sofort abbauen  (Häuser/Anlagen abbauen und zurückbauen, Fahrzeuge in der Werkstatt zerlegen)");
+                if (now != InstantDemolish)
+                    Run("instantdemolish " + (now ? "1" : "0"));
             }
             if (Match("Sofort herstellen"))
             {

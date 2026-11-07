@@ -22,7 +22,8 @@ namespace IfzCoop
         private sealed class Data
         {
             public int Version = 1;
-            public bool InstantBuild, InstantMake, OneHitAll;
+            public bool InstantBuild, InstantMake, OneHitAll, InstantDemolish;
+            public float ScavBoostAll = 1f;
             public List<string> Immortal = new List<string>();
             public List<string> OneHit = new List<string>();
             public Dictionary<string, float> ScavBoost = new Dictionary<string, float>();
@@ -88,6 +89,8 @@ namespace IfzCoop
                 InstantBuild = CheatWindow.InstantBuild,
                 InstantMake = CheatWindow.InstantMake,
                 OneHitAll = CheatWindow.OneHitAll,
+                InstantDemolish = CheatWindow.InstantDemolish,
+                ScavBoostAll = CheatWindow.ScavBoostAll,
                 Immortal = CheatWindow.Immortal.ToList(),
                 OneHit = CheatWindow.OneHit.ToList(),
                 ScavBoost = new Dictionary<string, float>(CheatWindow.ScavBoost),
@@ -141,6 +144,8 @@ namespace IfzCoop
             CheatWindow.InstantBuild = d.InstantBuild;
             CheatWindow.InstantMake = d.InstantMake;
             CheatWindow.OneHitAll = d.OneHitAll;
+            CheatWindow.InstantDemolish = d.InstantDemolish;
+            CheatWindow.ScavBoostAll = d.ScavBoostAll < 1f ? 1f : d.ScavBoostAll;
             Fill(CheatWindow.Immortal, d.Immortal);
             Fill(CheatWindow.OneHit, d.OneHit);
             Fill(CheatWindow.Indestructible, d.IndestructibleVehicles);
