@@ -56,7 +56,7 @@ namespace IfzCoop
             (Gameplay.Vehicles.ModificationType.ve_mod_tank_cannon, "Panzerkanone"),
         };
 
-        private static readonly (Gameplay.Vehicles.VehicleType type, string label)[] VehicleTypes =
+        internal static readonly (Gameplay.Vehicles.VehicleType type, string label)[] VehicleTypes =
         {
             (Gameplay.Vehicles.VehicleType.ve_minicar, "Kleinwagen"), (Gameplay.Vehicles.VehicleType.ve_sedan, "Limousine"),
             (Gameplay.Vehicles.VehicleType.ve_combi, "Kombi"), (Gameplay.Vehicles.VehicleType.ve_sport_car, "Sportwagen"),
@@ -632,7 +632,7 @@ namespace IfzCoop
         private int _spawnIdx;
         private Controllers.InfoPanelController _infoPanel;
 
-        private static readonly HarmonyLib.AccessTools.FieldRef<Controllers.VehiclesController, Gameplay.Vehicles.Vehicle.Factory> VehicleFactory =
+        internal static readonly HarmonyLib.AccessTools.FieldRef<Controllers.VehiclesController, Gameplay.Vehicles.Vehicle.Factory> VehicleFactory =
             HarmonyLib.AccessTools.FieldRefAccess<Controllers.VehiclesController, Gameplay.Vehicles.Vehicle.Factory>("_vehicleFactory");
 
         /// <summary>Angeklicktes Fahrzeug (Fahrzeug-Fenster offen) oder das Fahrzeug des ersten ausgewählten Trupps.</summary>

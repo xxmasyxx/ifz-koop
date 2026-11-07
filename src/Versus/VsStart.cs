@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -493,6 +493,14 @@ namespace IfzCoop.Versus
             var sb = new StringBuilder();
             var hq = HqController.MainHeadquarter;
             var hqPos = hq != null ? hq.Position : MyHqPos;
+            if (!s.CustomStart)
+            {
+                AppliedSummary = "Standard (wie auf der Karte)";
+                Plugin.Log.LogInfo("IFZVS Startbedingungen: Standard der Karte, nichts geändert");
+                if (_vs.Role == VsRole.Guest)
+                    _vs.SendToHost(BuildPopulation());
+                return;
+            }
             try
             {
                 if (s.Workers > 0)
@@ -556,10 +564,74 @@ namespace IfzCoop.Versus
                 Plugin.Log.LogError("IFZVS Start-Rohstoffe: " + e);
             }
 
+            try
+            {
+                int made = SpawnStartVehicles(s, hqPos);
+                if (made > 0) sb.Append(" veh ").Append(made);
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogError("IFZVS Start-Fahrzeuge: " + e);
+            }
+
             AppliedSummary = sb.ToString().Trim();
             Plugin.Log.LogInfo("IFZVS Startbedingungen gesetzt: " + AppliedSummary);
             if (_vs.Role == VsRole.Guest)
                 _vs.SendToHost(BuildPopulation());
+        }
+
+        private static readonly System.Reflection.MethodInfo NearestOnRoad =
+            AccessTools.Method(typeof(Utilities.PathfindingUtils), "GetNearestOnRoad", new[] { typeof(Vector3) });
+
+        /// <summary>Nächster Straßenpunkt (wie das Spiel herrenlose Autos abstellt), sonst die Stelle selbst.</summary>
+        private static Vector3 OnRoad(Vector3 pos)
+        {
+            try
+            {
+                if (NearestOnRoad == null) return pos;
+                object nn = NearestOnRoad.Invoke(null, new object[] { pos });
+                var t = Traverse.Create(nn);
+                if (t.Field("node").GetValue() == null) return pos;
+                var p = t.Field("position").GetValue<Vector3>();
+                return (p - pos).sqrMagnitude < 60f * 60f ? p : pos;
+            }
+            catch { return pos; }
+        }
+
+        /// <summary>Eingestellte Fahrzeuge im Kreis um das HQ, je auf die nächste Straße gesetzt, herrenlos (wie F7 „Fahrzeug erzeugen“).</summary>
+        private static int SpawnStartVehicles(VsSettings s, Vector3 hqPos)
+        {
+            var list = new List<Gameplay.Vehicles.VehicleType>();
+            foreach (var kv in s.Vehicles)
+                for (int i = 0; i < kv.Value; i++) list.Add(kv.Key);
+            if (list.Count == 0)
+                return 0;
+            var vc = GameAccess.Game<VehiclesController>();
+            var ids = GameAccess.Game<Serialization.Data.IdProvider>();
+            var factory = vc != null ? CheatWindow.VehicleFactory(vc) : null;
+            if (vc == null || ids == null || factory == null)
+                return 0;
+            int made = 0;
+            var used = new List<Vector3>();
+            for (int i = 0; i < list.Count; i++)
+            {
+                float a = i * Mathf.PI * 2f / list.Count + 0.4f;
+                float r = 22f + 6f * (i / 8);
+                var want = hqPos + new Vector3(Mathf.Cos(a) * r, 0f, Mathf.Sin(a) * r);
+                var pos = OnRoad(want);
+                // nicht aufeinander stapeln
+                foreach (var u in used)
+                    if ((u - pos).sqrMagnitude < 36f) { pos = want; break; }
+                used.Add(pos);
+                try
+                {
+                    var v = factory.Create(ids.GetNextId(), list[i], pos, Quaternion.Euler(0f, a * Mathf.Rad2Deg, 0f));
+                    vc.InitAbandonedVehicle(v);
+                    made++;
+                }
+                catch (Exception e) { Plugin.Log.LogWarning("IFZVS Start-Fahrzeug " + list[i] + ": " + e.Message); }
+            }
+            return made;
         }
 
         internal static List<Gameplay.Units.Characters.Character> Adults(Func<Gameplay.Units.Characters.Character, bool> pick)

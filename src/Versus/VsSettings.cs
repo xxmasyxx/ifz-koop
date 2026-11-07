@@ -1,9 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
 using Gameplay.GameResources;
+using Gameplay.Vehicles;
 
 namespace IfzCoop.Versus
 {
@@ -19,7 +20,7 @@ namespace IfzCoop.Versus
     /// </summary>
     internal sealed class VsSettings
     {
-        private const byte FormatVersion = 1;
+        private const byte FormatVersion = 2;
 
         /// <summary>Wählbare Start-Rohstoffe (zusätzlich zur normalen Startausstattung des Spiels im HQ).</summary>
         public static readonly (string label, ResourceID id)[] ResourceChoices =
@@ -33,16 +34,34 @@ namespace IfzCoop.Versus
             ("Treibstoff", ResourceID.res_fuel),
             ("Medizin", ResourceID.res_drugs),
             ("Munition", ResourceID.res_ammo),
+            ("Nahkampfwaffen", ResourceID.eq_basic_melee_weapon),
+            ("Stangenwaffen", ResourceID.eq_polearm),
+            ("Bögen", ResourceID.eq_bow),
+            ("Armbrüste", ResourceID.eq_crossbow),
             ("Pistolen", ResourceID.eq_pistol),
             ("Schrotflinten", ResourceID.eq_shotgun),
             ("Sturmgewehre", ResourceID.eq_assault_rifle),
+            ("Scharfschützengewehre", ResourceID.eq_sniper_rifle),
+            ("Molotow-Cocktails", ResourceID.eq_molotov),
+            ("Flammenwerfer", ResourceID.eq_flamethrower),
             ("Schützer", ResourceID.eq_wear_protectors),
+            ("Tarnkleidung", ResourceID.eq_wear_camouflage),
+            ("Plattenrüstung", ResourceID.eq_wear_plate),
             ("Schutzausrüstung", ResourceID.eq_wear_riot_gear),
+            ("Soldatenausrüstung", ResourceID.eq_wear_soldier_gear),
         };
 
         public static readonly int[] WorkerPresets = { 10, 20, 40 };
 
         public VsMode Mode = VsMode.FreeForAll;
+
+        /// <summary>false = Startausstattung wie auf der Karte (Spiel-Standard, der Mod ändert nichts). true = eigene Werte unten.</summary>
+        public bool CustomStart = true;
+
+        /// <summary>Fahrzeuge, die nach der HQ-Wahl am eigenen HQ stehen (herrenlos, mit einem Trupp einsteigen).</summary>
+        public readonly Dictionary<VehicleType, int> Vehicles = new Dictionary<VehicleType, int>();
+
+        public int VehicleAmount(VehicleType t) => Vehicles.TryGetValue(t, out var v) ? v : 0;
 
         /// <summary>Arbeiter (Erwachsene ohne Trupp) nach der HQ-Wahl. 0 = wie im Spiel (keine Änderung).</summary>
         public int Workers = 20;
@@ -79,6 +98,10 @@ namespace IfzCoop.Versus
         public void CopyFrom(VsSettings o)
         {
             Mode = o.Mode;
+            CustomStart = o.CustomStart;
+            Vehicles.Clear();
+            foreach (var kv in o.Vehicles)
+                Vehicles[kv.Key] = kv.Value;
             Workers = o.Workers;
             Squads = o.Squads;
             SquadSize = o.SquadSize;
@@ -106,6 +129,13 @@ namespace IfzCoop.Versus
                 if (v == 0) Resources.Remove(k);
                 else Resources[k] = v;
             }
+            var vkeys = new List<VehicleType>(Vehicles.Keys);
+            foreach (var k in vkeys)
+            {
+                int v = Math.Max(0, Math.Min(10, Vehicles[k]));
+                if (v == 0) Vehicles.Remove(k);
+                else Vehicles[k] = v;
+            }
         }
 
         public int ResourceAmount(ResourceID id) => Resources.TryGetValue(id, out var v) ? v : 0;
@@ -129,12 +159,19 @@ namespace IfzCoop.Versus
             w.Write(SharedAllySight);
             w.Write(Victory);
             w.Write((byte)MaxPlayers);
+            w.Write(CustomStart);
+            w.Write((ushort)Vehicles.Count);
+            foreach (var kv in Vehicles)
+            {
+                w.Write((int)kv.Key);
+                w.Write(kv.Value);
+            }
         }
 
         public static VsSettings Read(BinaryReader r)
         {
             byte version = r.ReadByte();
-            if (version != FormatVersion)
+            if (version != FormatVersion && version != 1)
                 throw new InvalidDataException("Versus-Einstellungen Format " + version);
             var s = new VsSettings();
             s.Revision = r.ReadInt32();
@@ -153,6 +190,16 @@ namespace IfzCoop.Versus
             s.SharedAllySight = r.ReadBoolean();
             s.Victory = r.ReadBoolean();
             s.MaxPlayers = r.ReadByte();
+            if (version >= 2)
+            {
+                s.CustomStart = r.ReadBoolean();
+                int nv = r.ReadUInt16();
+                for (int i = 0; i < nv; i++)
+                {
+                    var t = (VehicleType)r.ReadInt32();
+                    s.Vehicles[t] = r.ReadInt32();
+                }
+            }
             s.Clamp();
             return s;
         }
@@ -162,6 +209,7 @@ namespace IfzCoop.Versus
         {
             var sb = new StringBuilder();
             sb.Append("mode=").Append(Mode)
+              .Append(" start=").Append(CustomStart ? "custom" : "map")
               .Append(" workers=").Append(Workers)
               .Append(" squads=").Append(Squads).Append('x').Append(SquadSize)
               .Append(" scavVisible=").Append(ScavengedVisible ? 1 : 0)
@@ -178,6 +226,15 @@ namespace IfzCoop.Versus
                 sb.Append(keys[i]).Append(':').Append(Resources[keys[i]]);
             }
             if (keys.Count == 0) sb.Append('-');
+            sb.Append(" veh=");
+            var vk = new List<VehicleType>(Vehicles.Keys);
+            vk.Sort((a, b) => ((int)a).CompareTo((int)b));
+            for (int i = 0; i < vk.Count; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append(vk[i]).Append(':').Append(Vehicles[vk[i]]);
+            }
+            if (vk.Count == 0) sb.Append('-');
             return sb.ToString();
         }
 
@@ -201,6 +258,9 @@ namespace IfzCoop.Versus
                         case "allied": case "2": Mode = VsMode.AllAllied; return true;
                     }
                     break;
+                case "start":
+                    CustomStart = value.ToLowerInvariant() != "map" && value != "0";
+                    return true;
                 case "workers":
                     if (int.TryParse(value, NumberStyles.Integer, inv, out Workers)) return true;
                     break;
@@ -231,6 +291,11 @@ namespace IfzCoop.Versus
                     if (int.TryParse(value, NumberStyles.Integer, inv, out MaxPlayers)) return true;
                     break;
                 default:
+                    if (key.StartsWith("ve_") && Enum.TryParse(key, out VehicleType vt) && int.TryParse(value, NumberStyles.Integer, inv, out var vn))
+                    {
+                        Vehicles[vt] = vn;
+                        return true;
+                    }
                     if (Enum.TryParse(key, out ResourceID id) && int.TryParse(value, NumberStyles.Integer, inv, out var amount))
                     {
                         Resources[id] = amount;

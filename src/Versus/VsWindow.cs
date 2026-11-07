@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Globalization;
 using IfzCoop.Game;
 using Steamworks;
@@ -252,6 +252,23 @@ namespace IfzCoop.Versus
             int mode = Choice((int)s.Mode, ModeLabels, edit);
             if (mode != (int)s.Mode) { s.Mode = (VsMode)mode; changed = true; }
 
+            GUILayout.Label("Startausstattung:");
+            int start = Choice(s.CustomStart ? 1 : 0, new[] { "Standard (wie auf der Karte)", "Eigene (unten einstellen)" }, edit);
+            if ((start == 1) != s.CustomStart) { s.CustomStart = start == 1; changed = true; }
+            if (!s.CustomStart)
+                GUILayout.Label("  Jeder startet mit dem, was die Karte vorgibt (Einwohner, Trupps, Rohstoffe). Nichts wird geändert.");
+            else
+                changed |= DrawCustomStart(s, edit);
+            DrawRest(vs, s, edit, ref changed);
+
+            if (changed && edit)
+                vs.MarkSettingsChanged();
+        }
+
+        private static bool DrawCustomStart(VsSettings s, bool edit)
+        {
+            bool changed = false;
+            var inv = CultureInfo.InvariantCulture;
             GUILayout.Label("Einwohner am Anfang (Arbeiter):");
             var presets = VsSettings.WorkerPresets;
             int presetIdx = System.Array.IndexOf(presets, s.Workers);
@@ -308,6 +325,26 @@ namespace IfzCoop.Versus
                 GUILayout.EndHorizontal();
             }
 
+            GUILayout.Label("Fahrzeuge am HQ (stehen nach der HQ-Wahl herrenlos da, mit einem Trupp einsteigen):");
+            var vt = CheatWindow.VehicleTypes;
+            for (int i = 0; i < vt.Length; i += 2)
+            {
+                GUILayout.BeginHorizontal();
+                for (int j = i; j < i + 2 && j < vt.Length; j++)
+                {
+                    GUILayout.Label(vt[j].label, GUILayout.Width(120f));
+                    int cur = s.VehicleAmount(vt[j].type), was = cur;
+                    changed |= Stepper(ref cur, 0, 10, edit);
+                    if (cur != was) s.Vehicles[vt[j].type] = cur;
+                    GUILayout.Space(16f);
+                }
+                GUILayout.EndHorizontal();
+            }
+            return changed;
+        }
+
+        private static void DrawRest(VersusSession vs, VsSettings s, bool edit, ref bool changed)
+        {
             GUILayout.Label("Durchsuchte Häuser sichtbar:");
             int scav = Choice(s.ScavengedVisible ? 0 : 1, new[] { "ja (alle sehen es)", "nein (nur die eigenen)" }, edit);
             if ((scav == 0) != s.ScavengedVisible) { s.ScavengedVisible = scav == 0; changed = true; }
@@ -331,9 +368,6 @@ namespace IfzCoop.Versus
 
             GUILayout.Label("Zombies, Horden und Banditen: gemeinsam (rechnet der Host), sichtbar nur in der eigenen Sichtweite.");
             GUILayout.Label("Pause und Spieltempo: nur der Host.");
-
-            if (changed && edit)
-                vs.MarkSettingsChanged();
         }
 
         private static int Choice(int current, string[] labels, bool edit)
