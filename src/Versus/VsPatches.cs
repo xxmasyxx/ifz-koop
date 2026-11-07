@@ -76,12 +76,24 @@ namespace IfzCoop.Versus
 
         private static bool ProxyUpdatePrefix(Gameplay.Units.Group __instance) => VsUnits.GroupUpdatePrefix(__instance);
         private static bool ProxyFixedPrefix(Gameplay.Units.Group __instance) => VsUnits.GroupFixedPrefix(__instance);
+        /// <summary>Gemeinsamer Sperr-Prefix: Aufruf mit einem fremden Trupp oder fremden Auto als Argument → nicht ausführen.</summary>
         private static bool ProxyImmigrantPrefix(object[] __args)
         {
+            if (VsUnits.Applying || VsUnits.Instance == null || __args == null)
+                return true;
             foreach (var a in __args)
+            {
                 if (a is Gameplay.Units.Group g && VsUnits.IsProxy(g)) return false;
+                if (a is Gameplay.Vehicles.Vehicle v && VsUnits.IsProxyVehicle(v)) return false;
+            }
             return true;
         }
+
+        private static bool ProxyReceiveDamagePrefix(Gameplay.Units.Characters.Character __instance, Gameplay.Units.Equipment.Weapon attackedWith, float dmg,
+            Gameplay.Units.Interfaces.IDamageApplier damageApplier, ref bool __result)
+            => VsUnits.ReceiveDamagePrefix(__instance, attackedWith, dmg, damageApplier, ref __result);
+
+        private static bool ProxyVehicleDamagePrefix(Gameplay.Vehicles.Vehicle __instance) => VsUnits.VehicleDamagePrefix(__instance);
 
         private static bool ProxyDamagePrefix(Gameplay.Units.Characters.Character __instance) => VsUnits.DamagePrefix(__instance);
 
@@ -107,6 +119,11 @@ namespace IfzCoop.Versus
             TryPatch(harmony, typeof(Gameplay.Units.Group), "FixedUpdate", nameof(ProxyFixedPrefix), null);
             TryPatch(harmony, typeof(Gameplay.Units.Characters.Character), "SubtractHp", nameof(ProxyDamagePrefix), null);
             // Stellvertreter (Einwanderer-Vorlage) nie als Einwanderer behandeln: kein Funkspruch, nicht aufnehmen/ablehnen
+            TryPatch(harmony, typeof(Gameplay.Units.Characters.Character), "ReceiveDamage", nameof(ProxyReceiveDamagePrefix), null);
+            TryPatch(harmony, typeof(Gameplay.Vehicles.Vehicle), "SubtractHp", nameof(ProxyVehicleDamagePrefix), null);
+            // fremde Autos lassen sich nicht übernehmen
+            TryPatch(harmony, typeof(Gameplay.Units.Movements.GroupMovement), "MoveTo", nameof(ProxyImmigrantPrefix), null);
+            TryPatch(harmony, typeof(Gameplay.Units.VehicleHandler), "AssignVehicle", nameof(ProxyImmigrantPrefix), null);
             TryPatch(harmony, typeof(Gameplay.Immigrants.ImmigrantsController), "ImmigrantsSpotted", nameof(ProxyImmigrantPrefix), null);
             TryPatch(harmony, typeof(Gameplay.Immigrants.ImmigrantsController), "AcceptSpecificImmigrants", nameof(ProxyImmigrantPrefix), null);
             TryPatch(harmony, typeof(Gameplay.Immigrants.ImmigrantsController), "DeclineSpecificImmigrant", nameof(ProxyImmigrantPrefix), null);

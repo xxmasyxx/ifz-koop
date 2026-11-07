@@ -3,11 +3,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using Controllers;
-using Gameplay.FogOfWar;
+using Gameplay.GameResources;
 using Gameplay.Units;
 using Gameplay.Units.Characters;
 using Gameplay.Units.Enemy;
-using HarmonyLib;
+using Gameplay.Units.Equipment;
+using Gameplay.Units.Interfaces;
+using Data.Resorces;
+using Gameplay.Vehicles;
 using IfzCoop.Game;
 using IfzCoop.Net;
 using UnityEngine;
@@ -15,17 +18,20 @@ using UnityEngine;
 namespace IfzCoop.Versus
 {
     /// <summary>
-    /// Fremde Trupps sehen (KONZEPT-VERSUS Schritt 2, erste Stufe).
+    /// Fremde Trupps im Versus (KONZEPT-VERSUS Schritt 2 und 6).
     ///
-    /// - Jeder Spieler schickt 5× pro Sekunde, wo seine Trupps und deren Leute stehen (VsUnitSnap), alle 2 s die Liste seiner
-    ///   Trupps (VsUnitRoster). Gäste schicken an den Host, der Host verteilt an alle anderen (Sternform).
-    /// - Beim Empfänger entsteht je fremdem Trupp ein Stellvertreter: eine Gruppe aus der Vorlage der Überlebenden
-    ///   (GroupBuilder.SpawnGroupAt), für den Spieler neutral, Schild in Spielerfarbe. Er hat keine eigene KI
-    ///   (Prefix Group.CustomUpdate → Tick), läuft nur den gemeldeten Positionen nach und nimmt keinen Schaden
-    ///   (Prefix Character.SubtractHp). Tote beim Besitzer verschwinden auch beim Empfänger.
-    /// - Sichtbar wie andere fremde Gruppen nur in der Sichtweite der eigenen Leute (Nebel des Spiels, FogOfWarDetectable);
-    ///   Verbündete immer.
-    /// - Noch nicht: Fahrzeuge als eigene Stellvertreter, Waffen-Aussehen, Kampf zwischen Spielern.
+    /// - Jeder Spieler schickt 5× pro Sekunde seine Trupps (VsUnitSnap): Ort, je Figur ID, Ort, Blick, Tempo, Leben, Waffe;
+    ///   sitzt der Trupp im Auto: Auto-ID, Art, Ort, Blick. Alle 2 s die Liste seiner Trupps (VsUnitRoster).
+    ///   Gäste schicken an den Host, der Host verteilt an alle anderen (Sternform).
+    /// - Beim Empfänger je fremdem Trupp ein Stellvertreter (Einwanderer-Vorlage, „Überlebende“ gibt es in den Spieldaten
+    ///   nicht): Schild in Spielerfarbe, Name des Spielers, Waffen wie beim Besitzer, keine eigene KI (Prefix
+    ///   Group.CustomUpdate → Tick). Im Auto: ein Stellvertreter-Auto derselben Art, der Trupp sitzt drin; übernehmen lässt
+    ///   es sich nicht.
+    /// - Sicht: nur im eigenen Nebel, Verbündete immer.
+    /// - Kampf: nicht verbündet = feindlich (die eigenen Trupps und Türme greifen von selbst an). Treffer an Stellvertretern
+    ///   zieht der Empfänger NICHT selbst ab, er schickt sie an den Besitzer (VsHit); der zieht sie bei seiner echten Figur
+    ///   ab (mit Schutzkleidung usw.). Tote und Lebenspunkte kommen mit dem nächsten Schnappschuss zurück.
+    ///   Zombies und Banditen der eigenen Welt richten an Stellvertretern nichts an (jeder rechnet noch seine eigene Welt).
     /// </summary>
     internal sealed class VsUnits
     {
@@ -38,18 +44,17 @@ namespace IfzCoop.Versus
 
         public static VsUnits Instance { get; private set; }
 
-        /// <summary>true, solange ein Stellvertreter gebaut, verändert oder entfernt wird (Schadens-Sperre lässt dann durch).</summary>
+        /// <summary>true, solange ein Stellvertreter gebaut, verändert oder entfernt wird (Sperren lassen dann durch).</summary>
         public static bool Applying;
-
-        private static readonly AccessTools.FieldRef<Group, FogOfWarObserver> ObserverField =
-            AccessTools.FieldRefAccess<Group, FogOfWarObserver>("_fogOfWarObserver");
 
         private sealed class Member
         {
+            public string CharId;
             public Vector3 Position;
             public float Yaw;
             public float Speed;
             public float Hp;
+            public int Weapon;
         }
 
         private sealed class GroupData
@@ -57,6 +62,10 @@ namespace IfzCoop.Versus
             public string Id;
             public Vector3 Anchor;
             public readonly List<Member> Members = new List<Member>();
+            public string VehicleId;   // null = zu Fuß
+            public int VehicleType;
+            public Vector3 VehiclePos;
+            public float VehicleYaw;
         }
 
         private sealed class Proxy
@@ -66,19 +75,31 @@ namespace IfzCoop.Versus
             public Group Group;
             public Vector3 Anchor;
             public readonly List<Member> Targets = new List<Member>();
+            public readonly List<Character> Order = new List<Character>(); // Figur i ↔ Targets[i]
+            public readonly Dictionary<Character, int> Weapons = new Dictionary<Character, int>();
             public float LastHeard;
             public Color Color;
+            public Affiliation Aff = Affiliation.Neutral;
+            public Vehicle Vehicle;
+            public string VehicleOwnerId;
+            public Vector3 VehiclePos;
+            public float VehicleYaw;
         }
 
         private readonly VersusSession _vs;
         private readonly Dictionary<string, Proxy> _proxies = new Dictionary<string, Proxy>();
         private readonly Dictionary<Group, Proxy> _byGroup = new Dictionary<Group, Proxy>();
+        private readonly HashSet<Vehicle> _proxyVehicles = new HashSet<Vehicle>();
         private float _nextSend, _nextRoster, _nextCleanup;
 
         public int SnapsSent { get; private set; }
         public int SnapsReceived { get; private set; }
         public int ProxiesBuilt { get; private set; }
         public int ProxiesRemoved { get; private set; }
+        public int HitsSent { get; private set; }
+        public int HitsApplied { get; private set; }
+        public float DamageSent { get; private set; }
+        public float DamageTaken { get; private set; }
 
         public VsUnits(VersusSession vs)
         {
@@ -87,6 +108,7 @@ namespace IfzCoop.Versus
         }
 
         public static bool IsProxy(Group g) => g != null && Instance != null && Instance._byGroup.ContainsKey(g);
+        public static bool IsProxyVehicle(Vehicle v) => v != null && Instance != null && Instance._proxyVehicles.Contains(v);
 
         public void Reset()
         {
@@ -94,6 +116,7 @@ namespace IfzCoop.Versus
                 Destroy(p);
             _proxies.Clear();
             _byGroup.Clear();
+            _proxyVehicles.Clear();
             _nextSend = _nextRoster = _nextCleanup = 0f;
         }
 
@@ -174,14 +197,30 @@ namespace IfzCoop.Versus
                 if (!IsAlive(c) || c.Movement == null)
                     continue;
                 var h = c.Health;
+                int weapon = 0;
+                try { var w = c.ItemsContainer?.WeaponHandler?.CurrentWeapon; if (w != null) weapon = (int)w.ResourceType; } catch { }
                 d.Members.Add(new Member
                 {
+                    CharId = c.Id ?? "",
                     Position = c.Position,
                     Yaw = c.Movement.transform.eulerAngles.y,
                     Speed = c.Movement.NormalizedSpeed,
                     Hp = h == null || h.MaxHp <= 0f ? 1f : h.Hp / h.MaxHp,
+                    Weapon = weapon,
                 });
             }
+            try
+            {
+                var v = g.VehicleHandler != null && g.VehicleHandler.HaveVehicle() ? g.VehicleHandler.Vehicle : null;
+                if (v != null && !string.IsNullOrEmpty(v.Id))
+                {
+                    d.VehicleId = v.Id;
+                    d.VehicleType = (int)v.Data.GetVehicleType();
+                    d.VehiclePos = v.Position;
+                    d.VehicleYaw = v.Movement.transform.eulerAngles.y;
+                }
+            }
+            catch { }
             return d;
         }
 
@@ -195,13 +234,23 @@ namespace IfzCoop.Versus
                 {
                     w.Write(g.Id);
                     WriteVector(w, g.Anchor);
+                    w.Write(g.VehicleId != null);
+                    if (g.VehicleId != null)
+                    {
+                        w.Write(g.VehicleId);
+                        w.Write(g.VehicleType);
+                        WriteVector(w, g.VehiclePos);
+                        w.Write(YawToByte(g.VehicleYaw));
+                    }
                     w.Write((byte)g.Members.Count);
                     foreach (var m in g.Members)
                     {
+                        w.Write(m.CharId ?? "");
                         WriteVector(w, m.Position);
-                        w.Write((byte)Mathf.RoundToInt(Mathf.Repeat(m.Yaw, 360f) / 360f * 255f));
+                        w.Write(YawToByte(m.Yaw));
                         w.Write((byte)Mathf.Clamp(Mathf.RoundToInt(m.Speed * 100f), 0, 255));
                         w.Write((byte)Mathf.Clamp(Mathf.RoundToInt(m.Hp * 255f), 0, 255));
+                        w.Write(m.Weapon);
                     }
                 }
             });
@@ -216,16 +265,25 @@ namespace IfzCoop.Versus
             for (int i = 0; i < n; i++)
             {
                 var g = new GroupData { Id = r.ReadString(), Anchor = ReadVector(r) };
+                if (r.ReadBoolean())
+                {
+                    g.VehicleId = r.ReadString();
+                    g.VehicleType = r.ReadInt32();
+                    g.VehiclePos = ReadVector(r);
+                    g.VehicleYaw = ByteToYaw(r.ReadByte());
+                }
                 int m = r.ReadByte();
                 if (m > MaxMembers) throw new InvalidDataException("zu viele Leute");
                 for (int j = 0; j < m; j++)
                 {
                     g.Members.Add(new Member
                     {
+                        CharId = r.ReadString(),
                         Position = ReadVector(r),
-                        Yaw = r.ReadByte() / 255f * 360f,
+                        Yaw = ByteToYaw(r.ReadByte()),
                         Speed = r.ReadByte() / 100f,
                         Hp = r.ReadByte() / 255f,
+                        Weapon = r.ReadInt32(),
                     });
                 }
                 list.Add(g);
@@ -313,10 +371,11 @@ namespace IfzCoop.Versus
                 p.Anchor = g.Anchor;
                 p.Targets.Clear();
                 p.Targets.AddRange(g.Members);
-                // Weniger Leute: die überzähligen sterben
                 int alive = AliveCount(p.Group);
                 if (alive > g.Members.Count)
                     KillExtra(p.Group, alive - g.Members.Count);
+                ApplyWeapons(p);
+                ApplyVehicle(p, g);
             }
         }
 
@@ -362,9 +421,8 @@ namespace IfzCoop.Versus
                     group.ImmigrantsState = Gameplay.Immigrants.ImmigrantsState.Decline;
                 }
                 catch { }
-                try { group.ChangeAffiliation(Fraction.Player, Affiliation.Neutral); } catch (Exception e) { Plugin.Log.LogDebug("IFZVS Stellvertreter neutral: " + e.Message); }
+                SetAffiliation(p, _vs.Diplomacy.IsAlliedWithMe(slot) ? Affiliation.Neutral : Affiliation.Hostile);
                 try { group.SetGroupName(player != null ? player.Name : "Spieler " + (slot + 1)); } catch { }
-                // sofort an die richtigen Stellen
                 var chars = group.Characters;
                 for (int i = 0; i < chars.Count && i < g.Members.Count; i++)
                     try { chars[i].Movement?.Teleport(g.Members[i].Position); } catch { }
@@ -408,9 +466,23 @@ namespace IfzCoop.Versus
             return null;
         }
 
+        private static void SetAffiliation(Proxy p, Affiliation aff)
+        {
+            if (p.Group == null) return;
+            Applying = true;
+            try
+            {
+                p.Group.ChangeAffiliation(Fraction.Player, aff);
+                p.Aff = aff;
+            }
+            catch (Exception e) { Plugin.Log.LogDebug("IFZVS Zugehörigkeit: " + e.Message); }
+            finally { Applying = false; }
+        }
+
         private void Destroy(Proxy p)
         {
             _proxies.Remove(Key(p.Slot, p.OwnerId));
+            RemoveVehicle(p);
             if (p.Group != null)
             {
                 _byGroup.Remove(p.Group);
@@ -438,6 +510,91 @@ namespace IfzCoop.Versus
             finally { Applying = false; }
         }
 
+        // ================================================================ Waffen
+
+        private static void ApplyWeapons(Proxy p)
+        {
+            var chars = p.Group.Characters;
+            int ti = 0;
+            for (int i = 0; i < chars.Count && ti < p.Targets.Count; i++)
+            {
+                var c = chars[i];
+                if (!IsAlive(c)) continue;
+                int want = p.Targets[ti++].Weapon;
+                if (want == 0 || (p.Weapons.TryGetValue(c, out var have) && have == want))
+                    continue;
+                p.Weapons[c] = want;
+                try
+                {
+                    var id = (ResourceID)want;
+                    if (c.ItemsContainer?.WeaponHandler != null && c.ItemsContainer.WeaponHandler.TryAssignWeapon(id, dropPreviousWeapon: false))
+                        c.CharacterTextureRandomizer?.SetWeaponAppearance(id);
+                }
+                catch (Exception e) { Plugin.Log.LogDebug("IFZVS Waffe zeigen: " + e.Message); }
+            }
+        }
+
+        // ================================================================ Fahrzeuge
+
+        private void ApplyVehicle(Proxy p, GroupData g)
+        {
+            if (g.VehicleId == null)
+            {
+                if (p.Vehicle != null) RemoveVehicle(p);
+                return;
+            }
+            p.VehiclePos = g.VehiclePos;
+            p.VehicleYaw = g.VehicleYaw;
+            if (p.Vehicle != null && p.VehicleOwnerId == g.VehicleId)
+                return;
+            RemoveVehicle(p);
+            var vc = GameAccess.Game<VehiclesController>();
+            var ids = GameAccess.Game<Serialization.Data.IdProvider>();
+            var factory = vc != null ? CheatWindow.VehicleFactory(vc) : null;
+            if (vc == null || ids == null || factory == null)
+                return;
+            Applying = true;
+            try
+            {
+                var v = factory.Create(ids.GetNextId(), (VehicleType)g.VehicleType, g.VehiclePos, Quaternion.Euler(0f, g.VehicleYaw, 0f));
+                vc.AddVehicle(v);
+                try { v.DiscoverVehicle(); } catch { }
+                try { v.SetState(Vehicle.VehicleStates.Recovered); } catch { }
+                _proxyVehicles.Add(v);
+                p.Vehicle = v;
+                p.VehicleOwnerId = g.VehicleId;
+                try { p.Group.VehicleHandler.AssignVehicle(v); }
+                catch (Exception e) { Plugin.Log.LogDebug("IFZVS Trupp ins fremde Auto: " + e.Message); }
+                Plugin.Log.LogInfo($"IFZVS fremdes Auto {g.VehicleId} ({(VehicleType)g.VehicleType}) für Trupp {p.OwnerId}");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("IFZVS fremdes Auto bauen: " + e.Message);
+            }
+            finally
+            {
+                Applying = false;
+            }
+        }
+
+        private void RemoveVehicle(Proxy p)
+        {
+            var v = p.Vehicle;
+            if (v == null)
+                return;
+            p.Vehicle = null;
+            p.VehicleOwnerId = null;
+            Applying = true;
+            try
+            {
+                try { if (p.Group != null && p.Group.VehicleHandler != null && p.Group.VehicleHandler.HaveVehicle()) p.Group.VehicleHandler.AbandonVehicle(v); } catch { }
+                _proxyVehicles.Remove(v);
+                if (v != null && v.gameObject != null) UnityEngine.Object.Destroy(v.gameObject);
+            }
+            catch (Exception e) { Plugin.Log.LogDebug("IFZVS fremdes Auto entfernen: " + e.Message); }
+            finally { Applying = false; }
+        }
+
         // ================================================================ jedes Bild (statt Group.CustomUpdate)
 
         /// <summary>Prefix Group.CustomUpdate: false = Stellvertreter, die KI läuft nicht.</summary>
@@ -453,13 +610,45 @@ namespace IfzCoop.Versus
 
         public static bool GroupFixedPrefix(Group __instance) => !IsProxy(__instance);
 
-        /// <summary>Prefix Character.SubtractHp: Stellvertreter nehmen keinen Schaden (der Besitzer rechnet).</summary>
+        /// <summary>Prefix Character.SubtractHp: Stellvertreter verlieren selbst nie Leben (der Besitzer rechnet).</summary>
         public static bool DamagePrefix(Character __instance)
         {
             if (Applying || __instance == null || Instance == null || Instance._byGroup.Count == 0)
                 return true;
             return !IsProxy(__instance.Group);
         }
+
+        /// <summary>
+        /// Prefix Character.ReceiveDamage: Treffer an einem Stellvertreter → an den Besitzer schicken (nur Treffer der eigenen
+        /// Trupps und Türme), selbst nichts abziehen.
+        /// </summary>
+        public static bool ReceiveDamagePrefix(Character __instance, Weapon attackedWith, float dmg, IDamageApplier damageApplier, ref bool __result)
+        {
+            var inst = Instance;
+            if (Applying || inst == null || __instance == null || inst._byGroup.Count == 0)
+                return true;
+            if (!inst._byGroup.TryGetValue(__instance.Group, out var p))
+                return true;
+            __result = false;
+            try
+            {
+                var attacker = Sync.StatsSync.AttackerGroup(damageApplier);
+                bool mine = damageApplier == null || (attacker != null && attacker.Fraction == Fraction.Player && !IsProxy(attacker));
+                if (!mine || dmg <= 0f || p.Aff != Affiliation.Hostile)
+                    return false;
+                int idx = p.Order.IndexOf(__instance);
+                if (idx < 0 || idx >= p.Targets.Count || string.IsNullOrEmpty(p.Targets[idx].CharId))
+                    return false;
+                int weapon = attackedWith != null ? (int)attackedWith.ResourceType : 0;
+                inst.SendHit(p.Slot, p.OwnerId, p.Targets[idx].CharId, dmg, weapon);
+                __result = true;
+            }
+            catch (Exception e) { Plugin.Log.LogDebug("IFZVS Treffer melden: " + e.Message); }
+            return false;
+        }
+
+        /// <summary>Prefix Vehicle.SubtractHp: fremde Autos verlieren selbst kein Leben.</summary>
+        public static bool VehicleDamagePrefix(Vehicle __instance) => Applying || !IsProxyVehicle(__instance);
 
         private void Tick(Proxy p)
         {
@@ -468,7 +657,9 @@ namespace IfzCoop.Versus
                 return;
             float k = 1f - Mathf.Exp(-12f * Time.deltaTime);
             var chars = group.Characters;
+            p.Order.Clear();
             int ti = 0;
+            bool inVehicle = p.Vehicle != null;
             for (int i = 0; i < chars.Count; i++)
             {
                 var c = chars[i];
@@ -476,7 +667,16 @@ namespace IfzCoop.Versus
                     continue;
                 if (ti >= p.Targets.Count)
                     break;
+                p.Order.Add(c);
                 var t = p.Targets[ti++];
+                var h = c.Health;
+                if (h != null && h.MaxHp > 0f)
+                {
+                    float hp = Mathf.Max(1f, t.Hp * h.MaxHp);
+                    if (Mathf.Abs(h.Hp - hp) > h.MaxHp * 0.02f) { Applying = true; try { h.SetHp(hp); } finally { Applying = false; } }
+                }
+                if (inVehicle)
+                    continue; // sitzt im Auto
                 var mv = c.Movement;
                 if (mv == null)
                     continue;
@@ -487,23 +687,37 @@ namespace IfzCoop.Versus
                 var tr = mv.transform;
                 tr.rotation = Quaternion.Slerp(tr.rotation, Quaternion.Euler(0f, t.Yaw, 0f), k);
                 try { c.AnimationController?.SetSpeed(t.Speed); } catch { }
-                var h = c.Health;
-                if (h != null && h.MaxHp > 0f)
+            }
+            if (inVehicle)
+            {
+                var vm = p.Vehicle.Movement;
+                if (vm != null)
                 {
-                    float hp = Mathf.Max(1f, t.Hp * h.MaxHp);
-                    if (Mathf.Abs(h.Hp - hp) > h.MaxHp * 0.02f) h.SetHp(hp);
+                    if ((vm.Position - p.VehiclePos).sqrMagnitude > TeleportDistance * TeleportDistance)
+                        vm.Teleport(p.VehiclePos);
+                    else
+                        vm.SetPosition(Vector3.Lerp(vm.Position, p.VehiclePos, k), updateOnExpedition: false);
+                    var vt = vm.transform;
+                    vt.rotation = Quaternion.Slerp(vt.rotation, Quaternion.Euler(0f, p.VehicleYaw, 0f), k);
                 }
             }
             var gt = group.transform;
-            if ((gt.position - p.Anchor).sqrMagnitude > TeleportDistance * TeleportDistance)
-                gt.position = p.Anchor;
+            var anchor = inVehicle ? p.VehiclePos : p.Anchor;
+            if ((gt.position - anchor).sqrMagnitude > TeleportDistance * TeleportDistance)
+                gt.position = anchor;
             else
-                gt.position = Vector3.Lerp(gt.position, p.Anchor, k);
+                gt.position = Vector3.Lerp(gt.position, anchor, k);
             group.CachePosition();
+
+            // Freund oder Feind: verbündet = neutral, sonst feindlich (eigene Trupps greifen von selbst an)
+            bool allied = _vs.Diplomacy.IsAlliedWithMe(p.Slot);
+            var want = allied ? Affiliation.Neutral : Affiliation.Hostile;
+            if (p.Aff != want)
+                SetAffiliation(p, want);
 
             // Sicht: Verbündete immer, sonst nur in der Sichtweite der eigenen Leute (Nebel des Spiels)
             var fog = group.FogOfWarDetectable;
-            if (_vs.Diplomacy.IsAlliedWithMe(p.Slot))
+            if (allied)
             {
                 fog?.SetObserversCount(1);
                 if (!group.IsVisible()) group.Show();
@@ -512,10 +726,101 @@ namespace IfzCoop.Versus
             {
                 fog?.CustomUpdate();
             }
-            // Schild in Spielerfarbe
             var pointer = group.Pointer;
             if (pointer != null)
                 try { pointer.SetColor(p.Color); } catch { }
+        }
+
+        // ================================================================ Treffer
+
+        private void SendHit(byte targetSlot, string groupId, string charId, float dmg, int weapon)
+        {
+            HitsSent++;
+            DamageSent += dmg;
+            var msg = VsNet.Build(Msg.VsHit, w =>
+            {
+                w.Write(targetSlot);
+                w.Write(groupId);
+                w.Write(charId);
+                w.Write(dmg);
+                w.Write(weapon);
+            });
+            if (_vs.Role == VsRole.Host)
+            {
+                var peer = _vs.PeerBySlot(targetSlot);
+                if (peer != null) _vs.SendTo(peer.Id, msg);
+            }
+            else
+            {
+                _vs.SendToHost(msg);
+            }
+        }
+
+        /// <summary>Host: Treffer eines Gastes weiterleiten (an den Besitzer) oder selbst abziehen (Besitzer = Host).</summary>
+        public void HostOnHit(VsPeer from, BinaryReader r)
+        {
+            byte target = r.ReadByte();
+            string groupId = r.ReadString();
+            string charId = r.ReadString();
+            float dmg = r.ReadSingle();
+            int weapon = r.ReadInt32();
+            if (target == _vs.MySlot)
+            {
+                ApplyHit(groupId, charId, dmg, weapon);
+                return;
+            }
+            var peer = _vs.PeerBySlot(target);
+            if (peer == null || peer.Slot == from.Slot)
+                return;
+            _vs.SendTo(peer.Id, VsNet.Build(Msg.VsHit, w =>
+            {
+                w.Write(target);
+                w.Write(groupId);
+                w.Write(charId);
+                w.Write(dmg);
+                w.Write(weapon);
+            }));
+        }
+
+        public void GuestOnHit(BinaryReader r)
+        {
+            byte target = r.ReadByte();
+            string groupId = r.ReadString();
+            string charId = r.ReadString();
+            float dmg = r.ReadSingle();
+            int weapon = r.ReadInt32();
+            if (target == _vs.MySlot)
+                ApplyHit(groupId, charId, dmg, weapon);
+        }
+
+        /// <summary>Besitzer: Treffer bei der echten Figur abziehen (wie ein normaler Treffer, mit Schutzkleidung).</summary>
+        private void ApplyHit(string groupId, string charId, float dmg, int weapon)
+        {
+            if (!Running || dmg <= 0f || dmg > 100000f)
+                return;
+            var squads = GameAccess.Game<SquadsController>()?.Squads;
+            if (squads == null)
+                return;
+            foreach (var g in squads)
+            {
+                if (g == null || g.Id != groupId)
+                    continue;
+                foreach (var c in g.Characters)
+                {
+                    if (c == null || c.Id != charId || !IsAlive(c))
+                        continue;
+                    Weapon w = null;
+                    try { if (weapon != 0) w = ResourcesDataContainer.Instance.GetWeaponById((ResourceID)weapon); } catch { }
+                    try
+                    {
+                        c.ReceiveDamage(w, dmg, SubtractionHpReason.Enemy, null);
+                        HitsApplied++;
+                        DamageTaken += dmg;
+                    }
+                    catch (Exception e) { Plugin.Log.LogDebug("IFZVS Treffer abziehen: " + e.Message); }
+                    return;
+                }
+            }
         }
 
         // ================================================================ Hilfen
@@ -536,6 +841,9 @@ namespace IfzCoop.Versus
             return h == null || !h.IsDead();
         }
 
+        private static byte YawToByte(float yaw) => (byte)Mathf.RoundToInt(Mathf.Repeat(yaw, 360f) / 360f * 255f);
+        private static float ByteToYaw(byte b) => b / 255f * 360f;
+
         private static void WriteVector(BinaryWriter w, Vector3 v)
         {
             w.Write(v.x);
@@ -547,17 +855,21 @@ namespace IfzCoop.Versus
 
         public string Compact()
         {
-            int visible = 0;
+            int visible = 0, vehicles = 0, hostile = 0, armed = 0;
             var sb = new StringBuilder();
             foreach (var p in _proxies.Values)
             {
                 bool vis = p.Group != null && p.Group.IsVisible();
                 if (vis) visible++;
+                if (p.Vehicle != null) vehicles++;
+                if (p.Aff == Affiliation.Hostile) hostile++;
+                foreach (var kv in p.Weapons) if (kv.Value != 0 && kv.Value != (int)ResourceID.eq_basic_melee_weapon) armed++;
                 if (sb.Length > 0) sb.Append(',');
                 sb.Append(p.Slot).Append(':').Append(p.OwnerId).Append("->").Append(p.Group != null ? p.Group.Id : "-")
-                  .Append(vis ? "(sichtbar)" : "(versteckt)");
+                  .Append(vis ? "(sichtbar" : "(versteckt").Append(p.Aff == Affiliation.Hostile ? ",feind" : ",neutral")
+                  .Append(p.Vehicle != null ? ",auto)" : ")");
             }
-            return $"proxies={_proxies.Count} visible={visible} sent={SnapsSent} recv={SnapsReceived} built={ProxiesBuilt} removed={ProxiesRemoved} list={(sb.Length == 0 ? "-" : sb.ToString())}";
+            return $"proxies={_proxies.Count} visible={visible} hostile={hostile} vehicles={vehicles} armed={armed} sent={SnapsSent} recv={SnapsReceived} built={ProxiesBuilt} removed={ProxiesRemoved} hitsSent={HitsSent} hitsApplied={HitsApplied} dmgSent={DamageSent:0} dmgTaken={DamageTaken:0} list={(sb.Length == 0 ? "-" : sb.ToString())}";
         }
     }
 }

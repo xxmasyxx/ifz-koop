@@ -139,6 +139,7 @@ namespace IfzCoop.Net
         VsAllyAnswer = 110,     // Spieler -> Host: byte Platz des Fragenden, bool ja | Host -> Fragender: byte Platz, false (abgelehnt)
         VsScavenged = 111,
         VsUnitSnap = 112,       // Spieler -> Host -> alle: byte Platz, byte n, n × (string Trupp, Ort, byte m, m × (Ort, Blick, Tempo, Leben))
+        VsHit = 114,            // Spieler -> Host -> Besitzer: byte Platz des Besitzers, string Trupp, string Figur, float Schaden, int Waffe
         VsUnitRoster = 113,     // Spieler -> Host -> alle: byte Platz, byte n, n × string Trupp (alle 2 s; fehlende verschwinden)      // Spieler -> Host -> alle: byte Platz, int n, n × long Haus-ID (fertig geplündert)
         VsVoteStatus = 106,     // Host -> alle: string Anzeige der Abstimmung über Pause/Vorspulen („1 von 3 wollen vorspulen“)
         VsWeather = 120,        // Host -> alle: string WeatherControllerSerialized-JSON, int Tag

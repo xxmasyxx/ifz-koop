@@ -843,6 +843,9 @@ namespace IfzCoop.Versus
                 case Msg.VsUnitRoster:
                     Units.HostOnRoster(peer, r);
                     break;
+                case Msg.VsHit:
+                    Units.HostOnHit(peer, r);
+                    break;
                 case Msg.VsHqChosen:
                     Start.HostOnHqChosen(peer, r);
                     break;
@@ -1152,6 +1155,9 @@ namespace IfzCoop.Versus
                     break;
                 case Msg.VsUnitRoster:
                     Units.GuestOnRoster(r);
+                    break;
+                case Msg.VsHit:
+                    Units.GuestOnHit(r);
                     break;
                 case Msg.Notice:
                     Notice(r.ReadString());
