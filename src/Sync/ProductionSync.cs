@@ -692,6 +692,28 @@ namespace IfzCoop.Sync
             return MakeCustomization(wall, wc, roof, rc, enf, et, name);
         }
 
+        /// <summary>
+        /// Entwickler-Menü: Aussehen sofort ändern (Verstärkung, Wand-/Dachfarbe) wie „custom done“: Anpassung starten,
+        /// Auftrag anwenden, Arbeit beenden. Repariert vorher, weil das Spiel sonst erst eine Reparatur verlangt.
+        /// </summary>
+        public static string InstantCustomize(Building b, bool wall, Color wc, bool roof, Color rc, bool enf, int et)
+        {
+            if (b == null) return "Gebäude nicht gefunden";
+            if (CustF(b) == null) return "dieses Gebäude kann man nicht anpassen";
+            if (StateOf(b) != StructureStateType.Completed) return "geht nur bei fertigen Gebäuden (" + StateOf(b) + ")";
+            b.Health?.SetHealthAmount01(1f);
+            var q = MakeCustomization(wall, wc, roof, rc, enf, et, null);
+            ApplyCustomize(b, q, null);
+            if (StateOf(b) != StructureStateType.Customization) return "nichts zu ändern";
+            CustF(b).ApplyRequest();
+            var cw = b.CurrentWork;
+            if (cw is CustomizationWork || cw is RepairStructureWork)
+                cw.DeleteWork();
+            if (StateOf(b) == StructureStateType.Customization)
+                b.StateMachine.ChangeTo(StructureStateType.Completed);
+            return "Aussehen geändert: " + LookLine(b);
+        }
+
         private static CustomizationRequest MakeCustomization(bool wall, Color wc, bool roof, Color rc, bool enf, int et, string name)
         {
             var q = new CustomizationRequest();

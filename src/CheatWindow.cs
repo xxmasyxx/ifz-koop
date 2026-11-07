@@ -256,6 +256,10 @@ namespace IfzCoop
                 }
                 case "bld":
                     return BuildingCmd(a[1], long.Parse(a[2], inv));
+                case "blook-enf":
+                case "blook-wall":
+                case "blook-roof":
+                    return LookCmd(a);
                 case "fixstock":
                 {
                     var r = CleanStock();
@@ -470,6 +474,7 @@ namespace IfzCoop
             if (ScavBoost.Count > 0) on.Add(ScavBoost.Count + (ScavBoost.Count == 1 ? " Trupp" : " Trupps") + " plündert schneller");
             if (SpeedBoost.Count > 0) on.Add(SpeedBoost.Count + (SpeedBoost.Count == 1 ? " Fahrzeug" : " Fahrzeuge") + " mit anderem Tempo");
             if (Immortal.Count > 0) on.Add(Immortal.Count + (Immortal.Count == 1 ? " Trupp" : " Trupps") + " unsterblich");
+            if (IndestructibleBuildings.Count > 0) on.Add(IndestructibleBuildings.Count + (IndestructibleBuildings.Count == 1 ? " Gebäude" : " Gebäude") + " unzerstörbar");
             if (Indestructible.Count > 0) on.Add(Indestructible.Count + (Indestructible.Count == 1 ? " Fahrzeug" : " Fahrzeuge") + " unzerstörbar");
             return on.Count == 0 ? "keine Schalter an" : string.Join(", ", on);
         }
@@ -718,6 +723,65 @@ namespace IfzCoop
                 case "demolish":
                     b.StartDemolish();
                     return $"Haus {id} wird abgerissen";
+                case "hard":
+                    if (b.Health == null) return "kein Leben";
+                    IndestructibleBuildings[b.ID] = b.Health;
+                    b.Health.SetHealthAmount01(1f);
+                    return $"Haus {id} unzerstörbar";
+                case "soft":
+                    IndestructibleBuildings.Remove(b.ID);
+                    return $"Haus {id} wieder zerstörbar";
+                case "upgrade":
+                {
+                    if (st != Gameplay.Rebuilding.StateMachine.StructureStateType.Completed) return $"Haus {id}: Upgrade geht nur bei fertigen Gebäuden ({st})";
+                    var ph = b.PartialBuildingHandler;
+                    if (ph == null || ph.CurrentPartialValue >= 0.995f) return $"Haus {id} ist schon ganz ausgebaut";
+                    ph.SetTargetValue(1f);
+                    b.StartExtraAdapt();
+                    var w = b.ExtraAdaptationWork;
+                    if (w != null && !w.IsDone) w.BuildImmediately();
+                    return $"Haus {id} auf 100 % ausgebaut";
+                }
+            }
+            return "?";
+        }
+
+        /// <summary>Unzerstörbare Gebäude (ID → ihr Health). UnitPatches.HealthHpPrefix auf Health.SubtractHp.</summary>
+        public static readonly Dictionary<long, Gameplay.Units.Health> IndestructibleBuildings = new Dictionary<long, Gameplay.Units.Health>();
+
+        public static bool IsIndestructible(Gameplay.Units.Health h)
+        {
+            if (IndestructibleBuildings.Count == 0 || h == null) return false;
+            foreach (var x in IndestructibleBuildings.Values) if (ReferenceEquals(x, h)) return true;
+            return false;
+        }
+
+        private static readonly (int type, string label)[] Enforcements =
+        {
+            (1, "Holzbretter"), (2, "Metallgitter"), (3, "Ziegelverstärkung"), (4, "Diebstahlschutz"),
+        };
+
+        private static readonly (string hex, string label)[] LookColors =
+        {
+            ("E8E2D4", "Weiß"), ("8C8C8C", "Grau"), ("3B3B3B", "Dunkel"), ("9E3B2E", "Rot"),
+            ("3E6B3A", "Grün"), ("33557A", "Blau"), ("C9A13B", "Gelb"), ("7A5234", "Braun"),
+        };
+
+        private static string LookCmd(string[] a)
+        {
+            var b = FindBuilding(long.Parse(a[1], System.Globalization.CultureInfo.InvariantCulture));
+            if (b == null) return "Gebäude nicht gefunden";
+            Color c = Color.white;
+            switch (a[0])
+            {
+                case "blook-enf":
+                    return Sync.ProductionSync.InstantCustomize(b, false, c, false, c, true, int.Parse(a[2], System.Globalization.CultureInfo.InvariantCulture));
+                case "blook-wall":
+                    ColorUtility.TryParseHtmlString("#" + a[2], out c);
+                    return Sync.ProductionSync.InstantCustomize(b, true, c, false, Color.white, false, 0);
+                case "blook-roof":
+                    ColorUtility.TryParseHtmlString("#" + a[2], out c);
+                    return Sync.ProductionSync.InstantCustomize(b, false, Color.white, true, c, false, 0);
             }
             return "?";
         }
@@ -781,6 +845,7 @@ namespace IfzCoop
 
         public static void ResetGameOnly()
         {
+            if (IndestructibleBuildings.Count > 0) IndestructibleBuildings.Clear();
             if (WalkBoost.Count > 0) { WalkBoost.Clear(); WalkByMovement.Clear(); }
             InstantBuild = false;
             InstantMake = false;
@@ -1366,7 +1431,8 @@ namespace IfzCoop
             Btn("Jetzt alle Baustellen fertig", "finish");
             Btn("Alle Häuser plündern (Funde bleiben im Haus)", "scavengeall", danger: true);
 
-            Section("Ausgewähltes Gebäude", "Gebäude reparieren", "Gebäude fertig bauen", "Gebäude plündern", "Gebäude abreißen");
+            Section("Ausgewähltes Gebäude", "Gebäude reparieren", "Gebäude fertig bauen", "Gebäude plündern", "Gebäude abreißen",
+                "Upgrade auf 100 %", "Unzerstörbar", "Verstärkung", "Wandfarbe", "Dachfarbe", "Holzbretter", "Metallgitter", "Ziegelverstärkung", "Diebstahlschutz");
             if (!Searching)
                 GUILayout.Label(_selBuilding == 0 ? "Ausgewählt: keins (Gebäude im Spiel anklicken)" : "Ausgewählt: " + BuildingLabel(_selBuilding));
             if (_selBuilding != 0)
@@ -1377,6 +1443,40 @@ namespace IfzCoop
                 Btn("Gebäude fertig bauen", "bld finish " + id);
                 Btn("Gebäude plündern", "bld scavenge " + id);
                 GUILayout.EndHorizontal();
+                GUILayout.BeginHorizontal();
+                Btn("Upgrade auf 100 %", "bld upgrade " + id);
+                bool hardB = IndestructibleBuildings.ContainsKey(_selBuilding);
+                if (!IsGuest) Btn(hardB ? "Unzerstörbar: AN (Klick = aus)" : "Unzerstörbar machen", "bld " + (hardB ? "soft " : "hard ") + id);
+                else { Btn("Unzerstörbar an", "bld hard " + id); Btn("aus", "bld soft " + id); }
+                GUILayout.EndHorizontal();
+
+                // Aussehen: Verstärkung („Mauer“), Wand- und Dachfarbe – sofort, wie „Anpassen“ im Spiel
+                if (Match("Verstärkung") || Enforcements.Any(e => Match(e.label)))
+                {
+                    if (!Searching) GUILayout.Label("Verstärkung (sofort):", _hint);
+                    GUILayout.BeginHorizontal();
+                    foreach (var (et, el) in Enforcements)
+                        if (Match(el) || Match("Verstärkung")) Btn(el, $"blook-enf {id} {et}");
+                    GUILayout.EndHorizontal();
+                }
+                if (Match("Wandfarbe") || Match("Dachfarbe") || Match("Farbe"))
+                {
+                    foreach (var (kind, title) in new[] { ("wall", "Wandfarbe"), ("roof", "Dachfarbe") })
+                    {
+                        GUILayout.BeginHorizontal();
+                        GUILayout.Label(title + ":", GUILayout.Width(80f));
+                        foreach (var (hex, cl) in LookColors)
+                        {
+                            ColorUtility.TryParseHtmlString("#" + hex, out var col);
+                            var old = GUI.backgroundColor;
+                            GUI.backgroundColor = col;
+                            if (GUILayout.Button(new GUIContent("", title + ": " + cl), GUILayout.Width(44f), GUILayout.Height(22f)))
+                                Run($"blook-{kind} {id} {hex}");
+                            GUI.backgroundColor = old;
+                        }
+                        GUILayout.EndHorizontal();
+                    }
+                }
                 Btn("Gebäude abreißen", "bld demolish " + id, danger: true);
             }
 
@@ -1683,6 +1783,15 @@ namespace IfzCoop
                             n++;
                         }
                         catch (Exception e) { Plugin.Log.LogDebug($"Sofort bauen Haus {b.ID}: {e.Message}"); }
+                    }
+                    else if (st == Gameplay.Rebuilding.StateMachine.StructureStateType.ExtraAdapting)
+                    {
+                        try
+                        {
+                            var ew = b.ExtraAdaptationWork;
+                            if (ew != null && !ew.IsDone) { ew.BuildImmediately(); n++; }
+                        }
+                        catch (Exception e) { Plugin.Log.LogDebug($"Sofort erweitern Haus {b.ID}: {e.Message}"); }
                     }
                 }
             foreach (var s in Sync.StructureSync.All().ToList())

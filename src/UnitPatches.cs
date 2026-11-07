@@ -365,6 +365,9 @@ namespace IfzCoop
             TryPatch(harmony, typeof(Character), "SubtractHp", nameof(ImmortalPrefix));
             // Entwickler-Menü: unzerstörbare Fahrzeuge (CheatWindow.Indestructible), nur das gewählte Fahrzeug
             TryPatch(harmony, typeof(Vehicle), "SubtractHp", nameof(VehicleHpPrefix));
+            // Entwickler-Menü: unzerstörbare Gebäude (CheatWindow.IndestructibleBuildings) – am Health selbst,
+            // weil Gebäude an mehreren Stellen direkt Health.SubtractHp aufrufen
+            TryPatch(harmony, typeof(Gameplay.Units.Health), "SubtractHp", nameof(HealthHpPrefix));
             // Entwickler-Menü: schneller plündern je Trupp (CheatWindow.ScavBoost), Sofort töten (OneHit/OneHitAll)
             TryPatch(harmony, typeof(ScavengeWork), "Execute", nameof(ScavBoostPrefix));
             TryPatch(harmony, typeof(Vehicle), "UpdateMaxSpeed", null, nameof(VehicleSpeedPostfix));
@@ -477,6 +480,11 @@ namespace IfzCoop
             var s = CurrentSession;
             if (s != null && s.Role != Role.Guest && !UnitSync.NetApplying)
                 s.Stats?.AddForActor(Sync.StatsSync.Stat.Squads);
+        }
+
+        private static bool HealthHpPrefix(Gameplay.Units.Health __instance)
+        {
+            return CheatWindow.IndestructibleBuildings.Count == 0 || !CheatWindow.IsIndestructible(__instance);
         }
 
         private static void OverModUiPostfix(ref bool __result)
