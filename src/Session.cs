@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using Controllers.Time;
@@ -362,6 +362,11 @@ namespace IfzCoop
         }
 
         // ------------------------------------------------------------------ Spielzeit
+
+        /// <summary>Gast: die Uhr des Hosts steht gerade still (zwei Zeit-Meldungen mit gleicher Uhrzeit bei laufendem Spiel).</summary>
+        public static bool HostClockFrozen;
+        private int _lastHostDay = -1;
+        private float _lastHostGts = -1f;
 
         private static readonly System.Reflection.MethodInfo SetCurrentDayGtsMethod =
             HarmonyLib.AccessTools.Method(typeof(TimeController), "SetCurrentDayGts", new[] { typeof(float) });
@@ -1435,8 +1440,13 @@ namespace IfzCoop
                         // Die Nachricht ist eine halbe Pingzeit alt: so viel Spielzeit ist beim Host schon weiter.
                         float latency = _hostRttMs > 0 ? (float)(_hostRttMs / 2000.0) * speed : 0f;
                         TimeDriftSeconds = hostTotal + latency - localTotal;
+                        // Uhr des Hosts steht (F7 „Uhrzeit einfrieren“), obwohl das Spiel läuft: hier auch anhalten
+                        HostClockFrozen = speed > 0.01f && day == _lastHostDay && Mathf.Abs(dayGts - _lastHostGts) < 0.001f;
+                        _lastHostDay = day;
+                        _lastHostGts = dayGts;
                         if (!Mathf.Approximately(speed, TimeController.SpeedMultiplier))
                             ApplyHostSpeed(speed);
+                        if (HostClockFrozen) latency = 0f;
                         CorrectTime(day, Mathf.Min(dayGts + latency, dayLength - 0.01f), dayLength);
                     }
                     break;

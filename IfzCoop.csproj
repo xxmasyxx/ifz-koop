@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!--
     IFZ Koop: BepInEx-5-Plugin fÃ¼r Infection Free Zone (Unity 6000.0.26f1, Mono).
@@ -18,7 +18,7 @@
     <RootNamespace>IfzCoop</RootNamespace>
     <LangVersion>9.0</LangVersion>
     <Nullable>disable</Nullable>
-    <Version>0.23.23</Version>
+    <Version>0.23.24</Version>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>

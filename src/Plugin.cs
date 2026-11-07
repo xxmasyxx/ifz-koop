@@ -12,7 +12,7 @@ namespace IfzCoop
     {
         public const string Guid = "de.ifzcoop";
         public const string Name = "IFZ Koop";
-        public const string Version = "0.23.23";
+        public const string Version = "0.23.24";
 
         internal static Plugin Instance;
         internal static ManualLogSource Log;
@@ -87,6 +87,7 @@ namespace IfzCoop
             Sync.HqSuggest.Patch(_harmony);
             UnitPatches.Apply(_harmony);
             SaveExtras.Patch(_harmony);
+            ClockFreeze.Patch(_harmony);
 
             // Versus: eigene Haken, einzeln abgesichert (VERSUS-TECHNIK 1.3)
             Versus.VsPatches.Apply(_harmony);

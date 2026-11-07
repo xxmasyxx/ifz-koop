@@ -305,6 +305,9 @@ namespace IfzCoop
                 case "instantmake":
                     InstantMake = a[1] == "1";
                     return InstantMake ? "Sofort herstellen AN" : "Sofort herstellen AUS";
+                case "freezeclock":
+                    FreezeClock = a[1] == "1";
+                    return FreezeClock ? "Uhrzeit eingefroren" : "Uhrzeit läuft wieder";
                 case "instantcustomize":
                     InstantCustomize = a[1] == "1";
                     return InstantCustomize ? "Sofort anpassen AN" : "Sofort anpassen AUS";
@@ -499,6 +502,7 @@ namespace IfzCoop
             if (InstantMake) on.Add("Sofort herstellen");
             if (InstantDemolish) on.Add("Sofort abbauen");
             if (InstantCustomize) on.Add("Sofort anpassen");
+            if (FreezeClock) on.Add("Uhrzeit eingefroren");
             if (OneHitAll) on.Add("Sofort töten (alle)");
             else if (OneHit.Count > 0) on.Add("Sofort töten (" + OneHit.Count + (OneHit.Count == 1 ? " Trupp)" : " Trupps)"));
             if (WalkBoost.Count > 0) on.Add(WalkBoost.Count + (WalkBoost.Count == 1 ? " Trupp" : " Trupps") + " mit anderem Lauftempo");
@@ -894,6 +898,8 @@ namespace IfzCoop
             InstantMake = false;
             InstantDemolish = false;
             InstantCustomize = false;
+            FreezeClock = false;
+            Session.HostClockFrozen = false;
             OneHitAll = false;
             if (Immortal.Count > 0) Immortal.Clear();
             if (Indestructible.Count > 0) Indestructible.Clear();
@@ -938,6 +944,9 @@ namespace IfzCoop
 
         /// <summary>„Sofort anpassen“: Gebäude anpassen (Farbe, Verstärkung, Name) und reparieren sofort fertig.</summary>
         public static bool InstantCustomize;
+
+        /// <summary>„Uhrzeit einfrieren“: die Tageszeit bleibt stehen, das Spiel läuft weiter (ClockFreeze).</summary>
+        public static bool FreezeClock;
 
         private static int CustomizeAllNow()
         {
@@ -1953,6 +1962,11 @@ namespace IfzCoop
 
         private void DrawWorld()
         {
+            Section("Uhrzeit einfrieren", "Uhrzeit einfrieren");
+            bool frozen = FreezeClock || (IsGuest && Session.HostClockFrozen);
+            bool fz = GUILayout.Toggle(frozen, " Uhrzeit einfrieren  (die Uhr bleibt stehen, alles andere läuft weiter)");
+            if (fz != frozen)
+                Run("freezeclock " + (fz ? "1" : "0"));
             Section("Uhrzeit setzen", "6 Uhr", "12 Uhr", "18 Uhr", "22 Uhr");
             GUILayout.BeginHorizontal();
             foreach (int h in new[] { 6, 9, 12, 15, 18, 22 }) Btn(h + " Uhr", "hour " + h);
