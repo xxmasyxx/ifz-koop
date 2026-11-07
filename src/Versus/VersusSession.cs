@@ -137,6 +137,7 @@ namespace IfzCoop.Versus
         public VsClock Clock { get; }
         public VsVote Vote { get; }
         public VsDiplomacy Diplomacy { get; }
+        public VsUnits Units { get; }
 
         public IEnumerable<VsPeer> Peers => _peers.Values;
         public double HostRttMs => _hostRttMs;
@@ -157,6 +158,7 @@ namespace IfzCoop.Versus
             Clock = new VsClock(this);
             Vote = new VsVote(this);
             Diplomacy = new VsDiplomacy(this);
+            Units = new VsUnits(this);
             Settings.MaxPlayers = Mathf.Clamp(Plugin.MaxPlayers?.Value ?? 4, 2, VsProtocol.MaxPlayers);
             Instance = this;
         }
@@ -216,6 +218,8 @@ namespace IfzCoop.Versus
             {
                 try { Diplomacy.Update(now); }
                 catch (Exception e) { Plugin.Log.LogDebug("IFZVS Bündnisse: " + e.Message); }
+                try { Units.Update(now); }
+                catch (Exception e) { Plugin.Log.LogDebug("IFZVS fremde Trupps: " + e.Message); }
             }
         }
 
@@ -833,6 +837,12 @@ namespace IfzCoop.Versus
                 case Msg.VsScavenged:
                     Diplomacy.HostOnScavengedMsg(peer, r);
                     break;
+                case Msg.VsUnitSnap:
+                    Units.HostOnSnap(peer, r);
+                    break;
+                case Msg.VsUnitRoster:
+                    Units.HostOnRoster(peer, r);
+                    break;
                 case Msg.VsHqChosen:
                     Start.HostOnHqChosen(peer, r);
                     break;
@@ -1137,6 +1147,12 @@ namespace IfzCoop.Versus
                 case Msg.VsScavenged:
                     Diplomacy.GuestOnScavenged(r);
                     break;
+                case Msg.VsUnitSnap:
+                    Units.GuestOnSnap(r);
+                    break;
+                case Msg.VsUnitRoster:
+                    Units.GuestOnRoster(r);
+                    break;
                 case Msg.Notice:
                     Notice(r.ReadString());
                     break;
@@ -1358,6 +1374,7 @@ namespace IfzCoop.Versus
             Clock.Reset();
             Vote.Reset();
             Diplomacy.Reset();
+            Units.Reset();
             Status = status;
         }
 

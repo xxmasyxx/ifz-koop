@@ -183,6 +183,16 @@ namespace IfzCoop.Versus
                     vs.Diplomacy.Answer(byte.Parse(a[2], inv), a.Length > 3 && a[3] == "1");
                     return vs.Diplomacy.Compact();
 
+                case "drafts":
+                {
+                    var cfg = JutsuGamesConfig.Runtime.Configs.GetConfig<Gameplay.Units.Enemy.GroupsConfig>();
+                    var sb = new System.Text.StringBuilder();
+                    if (cfg?.GroupDrafts != null)
+                        foreach (var d in cfg.GroupDrafts)
+                            if (d != null) sb.Append(d.name).Append(':').Append(d.Fraction).Append(' ');
+                    return sb.ToString();
+                }
+
                 case "allyui":
                     VsDiplomacyUi.OpenFor(int.Parse(a[2], inv));
                     return "Fenster für Platz " + a[2];
@@ -206,6 +216,7 @@ namespace IfzCoop.Versus
             yield return "vs.settings=" + vs.Settings.Compact();
             yield return "vs.players=" + vs.Roster.Compact();
             yield return "vs.diplomacy " + vs.Diplomacy.Compact();
+            yield return "vs.units " + vs.Units.Compact();
 
             var st = vs.Start;
             var hq = HqController.MainHeadquarter;

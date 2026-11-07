@@ -13,7 +13,7 @@ namespace IfzCoop.Versus
     internal static class VsProtocol
     {
         /// <summary>Bei jeder inkompatiblen Änderung am Versus-Teil erhöhen (unabhängig von Protocol.Version).</summary>
-        public const int Version = 3; // 2: Abstimmung über Pause/Vorspulen; 3: Bündnisse, geplünderte Häuser (107–111), Einstellungen v3
+        public const int Version = 4; // 4: fremde Trupps (112/113); // 2: Abstimmung über Pause/Vorspulen; 3: Bündnisse, geplünderte Häuser (107–111), Einstellungen v3
 
         public const string LobbyKey = "ifzversus";
 

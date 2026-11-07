@@ -74,6 +74,17 @@ namespace IfzCoop.Versus
             }
         }
 
+        private static bool ProxyUpdatePrefix(Gameplay.Units.Group __instance) => VsUnits.GroupUpdatePrefix(__instance);
+        private static bool ProxyFixedPrefix(Gameplay.Units.Group __instance) => VsUnits.GroupFixedPrefix(__instance);
+        private static bool ProxyImmigrantPrefix(object[] __args)
+        {
+            foreach (var a in __args)
+                if (a is Gameplay.Units.Group g && VsUnits.IsProxy(g)) return false;
+            return true;
+        }
+
+        private static bool ProxyDamagePrefix(Gameplay.Units.Characters.Character __instance) => VsUnits.DamagePrefix(__instance);
+
         private static void LatLonHqPostfix(ref Gameplay.Buildings.Building __result)
         {
             if (__result != null && FreeHqWanted)
@@ -91,6 +102,15 @@ namespace IfzCoop.Versus
             TryPatch(harmony, typeof(HqController), "ChooseHqForRecommendedPlaces", nameof(RecommendedHqPrefix), null);
             TryPatch(harmony, typeof(MapEssentials.Map), "GetLatLonHq", null, nameof(LatLonHqPostfix));
             TryPatch(harmony, typeof(HqController), "IsHqPresentInGame", null, nameof(HqPresentPostfix));
+            // fremde Trupps (VsUnits): keine KI, kein Schaden
+            TryPatch(harmony, typeof(Gameplay.Units.Group), "CustomUpdate", nameof(ProxyUpdatePrefix), null);
+            TryPatch(harmony, typeof(Gameplay.Units.Group), "FixedUpdate", nameof(ProxyFixedPrefix), null);
+            TryPatch(harmony, typeof(Gameplay.Units.Characters.Character), "SubtractHp", nameof(ProxyDamagePrefix), null);
+            // Stellvertreter (Einwanderer-Vorlage) nie als Einwanderer behandeln: kein Funkspruch, nicht aufnehmen/ablehnen
+            TryPatch(harmony, typeof(Gameplay.Immigrants.ImmigrantsController), "ImmigrantsSpotted", nameof(ProxyImmigrantPrefix), null);
+            TryPatch(harmony, typeof(Gameplay.Immigrants.ImmigrantsController), "AcceptSpecificImmigrants", nameof(ProxyImmigrantPrefix), null);
+            TryPatch(harmony, typeof(Gameplay.Immigrants.ImmigrantsController), "DeclineSpecificImmigrant", nameof(ProxyImmigrantPrefix), null);
+            TryPatch(harmony, typeof(Gameplay.Immigrants.ImmigrantsController), "ChangeSpecificGroupAffiliation", nameof(ProxyImmigrantPrefix), null);
             TryPatch(harmony, typeof(Gameplay.Buildings.Building), "UpdateProduction", null, nameof(HqStoragePostfix));
 
             // Tempo und Pause nur vom Host
