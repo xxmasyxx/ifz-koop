@@ -81,6 +81,7 @@ namespace IfzCoop.Menu
         {
             if (!Visible) return;
             _rect = GUI.Window(WindowId, _rect, DrawWindow, "Meine Farbe – Farbrad");
+            ModUi.Report(WindowId, _rect);
         }
 
         /// <summary>Für den Testtreiber: Farbe direkt übernehmen wie mit dem Knopf.</summary>

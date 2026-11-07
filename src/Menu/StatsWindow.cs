@@ -114,6 +114,7 @@ namespace IfzCoop.Menu
             // (Spaltenbreite hängt an der Fensterbreite → Rückkopplung, Fenster wuchs endlos).
             var r = GUILayout.Window(WindowId, _rect, DrawWindow, "STATISTIK", _box, GUILayout.Width(_width), GUILayout.MaxWidth(_width));
             _rect = new Rect(r.x, r.y, _width, r.height);
+            ModUi.Report(WindowId, _rect);
 
             // Klicks über dem Fenster nicht an die Spiel-Oberfläche durchreichen
             var mouse = new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);

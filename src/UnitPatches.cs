@@ -368,6 +368,11 @@ namespace IfzCoop
             // Entwickler-Menü: schneller plündern je Trupp (CheatWindow.ScavBoost), Sofort töten (OneHit/OneHitAll)
             TryPatch(harmony, typeof(ScavengeWork), "Execute", nameof(ScavBoostPrefix));
             TryPatch(harmony, typeof(Vehicle), "UpdateMaxSpeed", null, nameof(VehicleSpeedPostfix));
+            // Mod-Fenster (F7, Statistik, Farbrad, F8): Maus darüber zählt als „über der Oberfläche“ → keine Klicks,
+            // kein Kartenziehen, kein Zoomen auf der Karte darunter (Bericht 2026-11-07)
+            TryPatch(harmony, typeof(GameInput.GameCursor), "IsPointerOverUIIgnoringLayer", null, nameof(OverModUiPostfix));
+            TryPatch(harmony, typeof(GameInput.GameCursor), "get_IsCursorOverGameObject", null, nameof(OverModUiPostfix));
+            TryPatch(harmony, typeof(Cameras.GameCameraInput), "GetZoomDelta", null, nameof(ZoomOverModUiPostfix));
             TryPatch(harmony, typeof(Gameplay.Units.Movements.Movement), "CalculateSpeed", null, nameof(WalkPostfix));
             try
             {
@@ -472,6 +477,16 @@ namespace IfzCoop
             var s = CurrentSession;
             if (s != null && s.Role != Role.Guest && !UnitSync.NetApplying)
                 s.Stats?.AddForActor(Sync.StatsSync.Stat.Squads);
+        }
+
+        private static void OverModUiPostfix(ref bool __result)
+        {
+            if (!__result && Menu.ModUi.MouseOverWindow()) __result = true;
+        }
+
+        private static void ZoomOverModUiPostfix(ref float __result)
+        {
+            if (__result != 0f && Menu.ModUi.MouseOverWindow()) __result = 0f;
         }
 
         // Movement.CalculateSpeed(...) → Weg pro Bild; Lauftempo je Trupp (CheatWindow.WalkByMovement)

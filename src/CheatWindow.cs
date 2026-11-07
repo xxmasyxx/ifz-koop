@@ -295,7 +295,7 @@ namespace IfzCoop
                 {
                     var groups = SquadsById(a[1].Split(',')).ToList();
                     if (groups.Count == 0) return "Trupp nicht gefunden";
-                    float pct = Mathf.Clamp(float.Parse(a[2], inv), 50f, 500f);
+                    float pct = Mathf.Clamp(float.Parse(a[2], inv), 50f, 2000f);
                     foreach (var g in groups)
                     {
                         if (Mathf.Abs(pct - 100f) < 1f) WalkBoost.Remove(g.Id); else WalkBoost[g.Id] = pct / 100f;
@@ -311,7 +311,7 @@ namespace IfzCoop
                     string names = string.Join(", ", groups.Select(g => SquadName(g.Id)));
                     if (a[0] == "sqscav")
                     {
-                        float pct = Mathf.Clamp(float.Parse(a[2], inv), 0f, 500f);
+                        float pct = Mathf.Clamp(float.Parse(a[2], inv), 0f, 10000f);
                         foreach (var g in groups)
                         {
                             if (pct < 1f) ScavBoost.Remove(g.Id); else ScavBoost[g.Id] = 1f + pct / 100f;
@@ -326,7 +326,7 @@ namespace IfzCoop
                 {
                     var v = FindVehicle(a[1]);
                     if (v == null) return "Fahrzeug nicht gefunden";
-                    float pct = Mathf.Clamp(float.Parse(a[2], inv), 50f, 500f);
+                    float pct = Mathf.Clamp(float.Parse(a[2], inv), 50f, 2000f);
                     if (Mathf.Abs(pct - 100f) < 1f) SpeedBoost.Remove(v.Id); else SpeedBoost[v.Id] = pct / 100f;
                     v.UpdateMaxSpeed();
                     return VehicleLabel(v.Data.GetVehicleType()) + $": Tempo {pct:0} %";
@@ -557,6 +557,7 @@ namespace IfzCoop
                 }
             }
             _rect = GUILayout.Window(WindowId, _rect, DrawContents, IsGuest ? "Entwickler-Menü (Gast, der Host führt aus)" : "Entwickler-Menü");
+            Menu.ModUi.Report(WindowId, _rect);
         }
 
         // ================================================================ ausgewählte Trupps
@@ -789,6 +790,29 @@ namespace IfzCoop
             if (ScavBoost.Count > 0) ScavBoost.Clear();
             if (OneHit.Count > 0) OneHit.Clear();
             if (SpeedBoost.Count > 0) SpeedBoost.Clear();
+        }
+
+        private readonly Dictionary<string, string> _numText = new Dictionary<string, string>();
+
+        /// <summary>Schieberegler (min..sliderMax) mit Zahlenfeld daneben, ins Feld geht auch mehr (bis fieldMax).</summary>
+        private float SliderField(string key, float value, float min, float sliderMax, float fieldMax, float sliderWidth)
+        {
+            float onSlider = Mathf.Clamp(value, min, sliderMax);
+            float moved = Mathf.Round(GUILayout.HorizontalSlider(onSlider, min, sliderMax, GUILayout.Width(sliderWidth)) / 10f) * 10f;
+            if (Mathf.Abs(moved - onSlider) > 0.5f) { value = moved; _numText.Remove(key); }
+            string name = "ifzcoop_num_" + key;
+            bool focused = GUI.GetNameOfFocusedControl() == name;
+            string shown = focused && _numText.TryGetValue(key, out var typed) ? typed : value.ToString("0", System.Globalization.CultureInfo.InvariantCulture);
+            GUI.SetNextControlName(name);
+            string now = GUILayout.TextField(shown, 5, GUILayout.Width(52f));
+            if (now != shown)
+            {
+                _numText[key] = now;
+                if (float.TryParse(now, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+                    value = Mathf.Clamp(parsed, min, fieldMax);
+            }
+            GUILayout.Label("%", GUILayout.Width(16f));
+            return value;
         }
 
         private float _scavPct = 100f;
@@ -1426,8 +1450,8 @@ namespace IfzCoop
                     float cur = 0f;
                     foreach (var g in groups) if (ScavBoost.TryGetValue(g.Id, out var f)) cur = Mathf.Max(cur, (f - 1f) * 100f);
                     GUILayout.BeginHorizontal();
-                    GUILayout.Label($"Plündern schneller: +{_scavPct:0} %", GUILayout.Width(190f));
-                    _scavPct = Mathf.Round(GUILayout.HorizontalSlider(_scavPct, 0f, 500f, GUILayout.Width(220f)) / 10f) * 10f;
+                    GUILayout.Label("Plündern schneller: +", GUILayout.Width(150f));
+                    _scavPct = SliderField("scav", _scavPct, 0f, 500f, 10000f, 200f);
                     if (GUILayout.Button(new GUIContent("Übernehmen", "Gilt nur für die ausgewählten Trupps. 0 % = normal."), GUILayout.Width(100f)))
                         Run($"sqscav {ids} {_scavPct.ToString("0", System.Globalization.CultureInfo.InvariantCulture)}");
                     GUILayout.EndHorizontal();
@@ -1439,8 +1463,8 @@ namespace IfzCoop
                     float curW = 100f;
                     foreach (var g in groups) if (WalkBoost.TryGetValue(g.Id, out var wf)) curW = wf * 100f;
                     GUILayout.BeginHorizontal();
-                    GUILayout.Label($"Lauftempo: {_walkPct:0} %", GUILayout.Width(190f));
-                    _walkPct = Mathf.Round(GUILayout.HorizontalSlider(_walkPct, 50f, 500f, GUILayout.Width(220f)) / 10f) * 10f;
+                    GUILayout.Label("Lauftempo:", GUILayout.Width(150f));
+                    _walkPct = SliderField("walk", _walkPct, 50f, 500f, 2000f, 200f);
                     if (GUILayout.Button(new GUIContent("Übernehmen", "Gilt nur für die ausgewählten Trupps (zu Fuß). 100 % = normal."), GUILayout.Width(100f)))
                         Run($"sqwalk {ids} {_walkPct.ToString("0", System.Globalization.CultureInfo.InvariantCulture)}");
                     GUILayout.EndHorizontal();
@@ -1537,8 +1561,8 @@ namespace IfzCoop
                 {
                     float curSpeed = SpeedBoost.TryGetValue(v.Id, out var sf) ? sf * 100f : 100f;
                     GUILayout.BeginHorizontal();
-                    GUILayout.Label($"Tempo: {_speedPct:0} %", GUILayout.Width(120f));
-                    _speedPct = Mathf.Round(GUILayout.HorizontalSlider(_speedPct, 50f, 500f, GUILayout.Width(250f)) / 10f) * 10f;
+                    GUILayout.Label("Tempo:", GUILayout.Width(60f));
+                    _speedPct = SliderField("speed", _speedPct, 50f, 500f, 2000f, 220f);
                     if (GUILayout.Button(new GUIContent("Übernehmen", "Gilt nur für dieses Fahrzeug. 100 % = normal."), GUILayout.Width(100f)))
                         Run($"vspeed {v.Id} {_speedPct.ToString("0", System.Globalization.CultureInfo.InvariantCulture)}");
                     if (GUILayout.Button(new GUIContent("Normal", "Tempo zurück auf 100 %"), GUILayout.Width(70f)))

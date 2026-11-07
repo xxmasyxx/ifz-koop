@@ -149,6 +149,7 @@ namespace IfzCoop
         {
             if (!Visible) return;
             _rect = GUI.Window(0x1F2E3D, _rect, DrawWindow, "Fehler melden (" + Plugin.BugReportKey.Value + ")");
+            Menu.ModUi.Report(0x1F2E3D, _rect);
         }
 
         private static void DrawWindow(int id)

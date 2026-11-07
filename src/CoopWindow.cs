@@ -52,6 +52,7 @@ namespace IfzCoop
             if (!Visible)
                 return;
             _rect = GUILayout.Window(WindowId, _rect, DrawContents, $"{Plugin.Name} {Plugin.Version}");
+            Menu.ModUi.Report(WindowId, _rect);
         }
 
         private GUIStyle _noticeStyle;
