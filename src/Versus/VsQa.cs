@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
@@ -189,6 +189,7 @@ namespace IfzCoop.Versus
                 yield break;
             yield return "vs.settings=" + vs.Settings.Compact();
             yield return "vs.players=" + vs.Roster.Compact();
+            yield return "vs.diplomacy " + vs.Diplomacy.Compact();
 
             var st = vs.Start;
             var hq = HqController.MainHeadquarter;

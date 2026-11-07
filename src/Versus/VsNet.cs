@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using IfzCoop.Net;
@@ -13,7 +13,7 @@ namespace IfzCoop.Versus
     internal static class VsProtocol
     {
         /// <summary>Bei jeder inkompatiblen Änderung am Versus-Teil erhöhen (unabhängig von Protocol.Version).</summary>
-        public const int Version = 2; // 2: Abstimmung über Pause/Vorspulen (SpeedRequest, VsVoteStatus)
+        public const int Version = 3; // 2: Abstimmung über Pause/Vorspulen; 3: Bündnisse, geplünderte Häuser (107–111), Einstellungen v3
 
         public const string LobbyKey = "ifzversus";
 

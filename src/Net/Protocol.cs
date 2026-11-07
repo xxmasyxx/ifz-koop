@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Text;
 
@@ -133,6 +133,11 @@ namespace IfzCoop.Net
         VsRoster = 103,         // Host -> alle: n × (Platz, Steam-ID, Name, Farbe, Team, lebt, Zustand)
         VsStartPhase = 104,     // Host -> alle: byte Phase (0 Lobby, 1 Spielstand kommt, 2 HQ wählen, 3 los), byte Startweg, string Text, [S2: int Übertragung, x, y, Zoom, Rand]
         VsHqChosen = 105,       // Gast -> Host: long Gebäude-ID, float x, float z (geheim)
+        VsRelations = 107,      // Host -> alle: byte n, n × (byte Platz, byte Platz) – verbündete Paare
+        VsAllyRequest = 108,    // Spieler -> Host: byte Ziel-Platz, byte 0 = Bündnis anbieten, 1 = beenden
+        VsAllyAsk = 109,        // Host -> Spieler: byte Platz des Fragenden
+        VsAllyAnswer = 110,     // Spieler -> Host: byte Platz des Fragenden, bool ja | Host -> Fragender: byte Platz, false (abgelehnt)
+        VsScavenged = 111,      // Spieler -> Host -> alle: byte Platz, int n, n × long Haus-ID (fertig geplündert)
         VsVoteStatus = 106,     // Host -> alle: string Anzeige der Abstimmung über Pause/Vorspulen („1 von 3 wollen vorspulen“)
         VsWeather = 120,        // Host -> alle: string WeatherControllerSerialized-JSON, int Tag
         VsPopulation = 138,     // Spieler -> Host: bool Start gesetzt, int Arbeiter, Kinder, Trupps, Soldaten, string Start-Rohstoffe

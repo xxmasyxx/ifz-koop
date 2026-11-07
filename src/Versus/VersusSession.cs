@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using Controllers;
@@ -136,6 +136,7 @@ namespace IfzCoop.Versus
         public VsStart Start { get; }
         public VsClock Clock { get; }
         public VsVote Vote { get; }
+        public VsDiplomacy Diplomacy { get; }
 
         public IEnumerable<VsPeer> Peers => _peers.Values;
         public double HostRttMs => _hostRttMs;
@@ -155,6 +156,7 @@ namespace IfzCoop.Versus
             Start = new VsStart(this);
             Clock = new VsClock(this);
             Vote = new VsVote(this);
+            Diplomacy = new VsDiplomacy(this);
             Settings.MaxPlayers = Mathf.Clamp(Plugin.MaxPlayers?.Value ?? 4, 2, VsProtocol.MaxPlayers);
             Instance = this;
         }
@@ -210,6 +212,11 @@ namespace IfzCoop.Versus
 
             if (Role != VsRole.None)
                 Start.Update(now);
+            if (Role != VsRole.None)
+            {
+                try { Diplomacy.Update(now); }
+                catch (Exception e) { Plugin.Log.LogDebug("IFZVS Bündnisse: " + e.Message); }
+            }
         }
 
         private void UpdateHost(float now)
@@ -672,6 +679,7 @@ namespace IfzCoop.Versus
             StartMode = tile ? (byte)2 : (byte)1;
             Phase = VsPhase.Transfer;
             BroadcastWelcomed(BuildSettings());
+            Diplomacy.HostInit();
             if (targets.Count == 0)
             {
                 Phase = VsPhase.Lobby;
@@ -804,9 +812,27 @@ namespace IfzCoop.Versus
                         _transport.Send(peer.Id, Clock.BuildTimeState());
                         Clock.ResendWeather();
                         if (VsVote.Enabled) Vote.OnPlayersChanged();
+                        Diplomacy.HostOnPeerLoaded(peer);
                     }
                     break;
                 }
+                case Msg.VsAllyRequest:
+                {
+                    byte target = r.ReadByte();
+                    byte kind = r.ReadByte();
+                    Diplomacy.HostOnRequest(peer.Slot, target, kind);
+                    break;
+                }
+                case Msg.VsAllyAnswer:
+                {
+                    byte asker = r.ReadByte();
+                    bool yes = r.ReadBoolean();
+                    Diplomacy.HostOnAnswer(peer.Slot, asker, yes);
+                    break;
+                }
+                case Msg.VsScavenged:
+                    Diplomacy.HostOnScavengedMsg(peer, r);
+                    break;
                 case Msg.VsHqChosen:
                     Start.HostOnHqChosen(peer, r);
                     break;
@@ -1099,6 +1125,18 @@ namespace IfzCoop.Versus
                 case Msg.VsVoteStatus:
                     Vote.Text = r.ReadString();
                     break;
+                case Msg.VsRelations:
+                    Diplomacy.GuestOnRelations(r);
+                    break;
+                case Msg.VsAllyAsk:
+                    Diplomacy.LocalOnAsk(r.ReadByte());
+                    break;
+                case Msg.VsAllyAnswer:
+                    Diplomacy.GuestOnAnswer(r);
+                    break;
+                case Msg.VsScavenged:
+                    Diplomacy.GuestOnScavenged(r);
+                    break;
                 case Msg.Notice:
                     Notice(r.ReadString());
                     break;
@@ -1319,6 +1357,7 @@ namespace IfzCoop.Versus
             Start.Reset();
             Clock.Reset();
             Vote.Reset();
+            Diplomacy.Reset();
             Status = status;
         }
 

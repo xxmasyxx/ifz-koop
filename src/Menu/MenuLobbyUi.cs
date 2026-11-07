@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using IfzCoop.Game;
 using Steamworks;
@@ -65,6 +65,7 @@ namespace IfzCoop.Menu
             public Button Button;
             public ulong SteamId;
             public bool Empty;
+            public int VsSlot = -1;
         }
 
         private static Session S => Plugin.Instance?.Session;
@@ -404,6 +405,8 @@ namespace IfzCoop.Menu
             public string Name;
             public string State;
             public bool IsHost;
+            public Color? Color;
+            public int VsSlotPlus1; // Versus-Platz + 1, 0 = keiner (Struktur ohne Feld-Startwerte)
         }
 
         private static List<Member> Members()
@@ -413,6 +416,18 @@ namespace IfzCoop.Menu
             if (s == null || !s.SteamReady)
             {
                 list.Add(new Member { Name = "Du", State = "kein Steam" });
+                return list;
+            }
+            var vs = Versus.VersusSession.Instance;
+            if (Versus.VersusSession.Active && vs.Roster.Count > 0)
+            {
+                // Versus: Spielerliste der Runde, im Spiel mit Bündnis-Stand (Klick = Bündnis-Fenster)
+                bool running = _inGame && vs.Phase != Versus.VsPhase.Lobby;
+                foreach (var p in vs.Roster.Players)
+                {
+                    string state = p.Slot == vs.MySlot ? "Du" : running ? vs.Diplomacy.RelationLabel(p.Slot) : Versus.VsRoster.StateLabel(p.State);
+                    list.Add(new Member { Id = p.Id, Name = p.Name, State = state, IsHost = p.Slot == 0, Color = (Color)p.Color, VsSlotPlus1 = p.Slot + 1 });
+                }
                 return list;
             }
             ulong me = SteamUser.GetSteamID().m_SteamID;
@@ -468,7 +483,8 @@ namespace IfzCoop.Menu
                     t.Name.gameObject.SetActive(true);
                     t.Sub.gameObject.SetActive(true);
                     Color c = Color.gray;
-                    try { c = s != null ? s.PlayerColors.ColorOf(m.Id) : Color.gray; } catch { }
+                    try { c = m.Color ?? (s != null ? s.PlayerColors.ColorOf(m.Id) : Color.gray); } catch { }
+                    t.VsSlot = m.VsSlotPlus1 - 1;
                     t.Strip.color = c;
                     t.Strip.gameObject.SetActive(true);
                     UpdateAvatar(t, m.Id);
@@ -476,6 +492,7 @@ namespace IfzCoop.Menu
                 else
                 {
                     t.Empty = true;
+                    t.VsSlot = -1;
                     t.SteamId = 0;
                     t.Plus.gameObject.SetActive(true);
                     t.Name.gameObject.SetActive(false);
@@ -554,6 +571,19 @@ namespace IfzCoop.Menu
             if (s == null)
                 return;
             var t = _tiles[index];
+            var vsi = Versus.VersusSession.Instance;
+            if (!t.Empty && Versus.VersusSession.Active && t.VsSlot >= 0)
+            {
+                // Versus im Spiel: Klick auf einen anderen Spieler = Bündnis-Fenster
+                if (_inGame && t.VsSlot != vsi.MySlot)
+                    Versus.VsDiplomacyUi.OpenFor(t.VsSlot);
+                return;
+            }
+            if (t.Empty && Versus.VersusSession.Active)
+            {
+                if (vsi.Role == Versus.VsRole.Host && vsi.Phase == Versus.VsPhase.Lobby) vsi.OpenInviteDialog();
+                return;
+            }
             if (!t.Empty)
             {
                 // eigene Kachel: Mehrspieler-Fenster öffnen (dort „Meine Farbe“)

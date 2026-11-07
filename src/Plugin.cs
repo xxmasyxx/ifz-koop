@@ -12,7 +12,7 @@ namespace IfzCoop
     {
         public const string Guid = "de.ifzcoop";
         public const string Name = "IFZ Koop";
-        public const string Version = "0.23.27";
+        public const string Version = "0.24.0";
 
         internal static Plugin Instance;
         internal static ManualLogSource Log;
@@ -277,6 +277,7 @@ namespace IfzCoop
             BugReport.Draw();
             Menu.ColorPickerWindow.Draw();
             Menu.StatsWindow.Draw();
+            Versus.VsDiplomacyUi.Draw();
         }
 
         private void OnApplicationQuit()
