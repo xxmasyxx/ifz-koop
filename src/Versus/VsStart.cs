@@ -527,21 +527,27 @@ namespace IfzCoop.Versus
 
             try
             {
-                if (s.Squads > 0)
+                // „Trupps am Anfang“ = Gesamtzahl: Trupps, die das Spiel schon mitgibt (z. B. Vorlage-Städte), zählen mit
+                // (Bericht 2026-11-07: 1 eingestellt, 2 bekommen)
+                CountPopulation(out _, out _, out int haveSquads, out _);
+                int toMake = Mathf.Max(0, s.Squads - haveSquads);
+                if (toMake > 0)
                 {
                     var builder = GameAccess.Game<GroupBuilder>();
                     var config = JutsuGamesConfig.Runtime.Configs.GetConfig<Gameplay.Units.Enemy.GroupsConfig>();
                     var draft = config?.GetDraftByName("player");
                     int made = 0;
-                    for (int i = 0; i < s.Squads && builder != null && draft != null; i++)
+                    for (int i = 0; i < toMake && builder != null && draft != null; i++)
                     {
-                        float a = i * Mathf.PI * 2f / Mathf.Max(1, s.Squads);
+                        float a = i * Mathf.PI * 2f / Mathf.Max(1, toMake);
                         var pos = hqPos + new Vector3(Mathf.Cos(a) * 10f, 0f, Mathf.Sin(a) * 10f);
                         if (builder.Clear().SpawnGroupAt(pos, draft, s.SquadSize) != null)
                             made++;
                     }
                     sb.Append("squads ").Append(made).Append('x').Append(s.SquadSize).Append(' ');
                 }
+                else
+                    sb.Append("squads schon ").Append(haveSquads).Append(' ');
             }
             catch (Exception e)
             {

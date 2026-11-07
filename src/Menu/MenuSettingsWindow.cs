@@ -437,7 +437,7 @@ namespace IfzCoop.Menu
                 () => VsS.Mode == Versus.VsMode.Teams ? "teams" : VsS.Mode == Versus.VsMode.AllAllied ? "allied" : "ffa", v => VsSet("mode", v));
             Choice("versus", "Einwohner am Anfang", new[] { "Wie im Spiel", "10", "20", "40" }, new[] { "0", "10", "20", "40" },
                 () => VsS.Workers.ToString(), v => VsSet("workers", v));
-            Choice("versus", "Trupps am Anfang", new[] { "Keiner", "1", "2", "3" }, new[] { "0", "1", "2", "3" },
+            Choice("versus", "Trupps am Anfang", new[] { "Wie im Spiel", "1", "2", "3" }, new[] { "0", "1", "2", "3" },
                 () => VsS.Squads.ToString(), v => VsSet("squads", v));
             Choice("versus", "Truppgröße", new[] { "2", "3", "4", "6", "8" }, new[] { "2", "3", "4", "6", "8" },
                 () => VsS.SquadSize.ToString(), v => VsSet("squadsize", v));
