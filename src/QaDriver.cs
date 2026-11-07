@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.IO;
 using System.Text;
@@ -66,6 +66,7 @@ namespace IfzCoop
         public static bool IsActive { get; private set; }
 
         private readonly bool _newGame;
+        private readonly bool _newGameSuggested;
         private readonly int _newGameX;
         private readonly int _newGameY;
 
@@ -93,6 +94,7 @@ namespace IfzCoop
                 {
                     _newGameX = x;
                     _newGameY = y;
+                    _newGameSuggested = p.Length >= 3 && p[2] == "s"; // „x,y,s“ = wie aus der Liste der vorgeschlagenen Städte
                     _newGame = true;
                 }
             }
@@ -186,7 +188,7 @@ namespace IfzCoop
                 Plugin.Log.LogInfo($"IFZCOOP QA neues Spiel auf Kachel {_newGameX},{_newGameY}");
                 try
                 {
-                    Commands.MenuConsoleCommandsHandler.LoadTileWithConfiguration(_newGameX, _newGameY, 15, 1, 9, Vector2Int.zero, fromSuggestedCitiesList: false);
+                    Commands.MenuConsoleCommandsHandler.LoadTileWithConfiguration(_newGameX, _newGameY, 15, 1, 9, Vector2Int.zero, fromSuggestedCitiesList: _newGameSuggested);
                 }
                 catch (Exception e)
                 {

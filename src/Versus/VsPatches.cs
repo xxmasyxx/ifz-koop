@@ -34,6 +34,39 @@ namespace IfzCoop.Versus
 
         private static void HqStoragePostfix(Gameplay.Buildings.Building __instance) => VsStart.UpdateStoragePostfix(__instance);
 
+        /// <summary>
+        /// Versus braucht freie HQ-Wahl. Bei Vorlage-Karten (vorgeschlagene Städte) baut das Spiel das HQ sonst schon beim
+        /// Erzeugen der Karte (HqController.ChooseHqForRecommendedPlaces) bzw. schlägt ein festes Gebäude vor
+        /// (Map.GetLatLonHq). Gilt, sobald Versus läuft oder der Host in der Mehrspieler-Lobby „Versus“ gewählt hat.
+        /// </summary>
+        internal static bool FreeHqWanted
+        {
+            get
+            {
+                if (VersusSession.Active || VsQa.HasArgs) return true;
+                var koop = Plugin.Instance?.Session;
+                return koop != null && koop.Role == Role.Host && Menu.LobbySettings.Mode == "versus";
+            }
+        }
+
+        private static readonly System.Reflection.FieldInfo HqSetterField = AccessTools.Field(typeof(HqController), "_hqSetterController");
+
+        private static bool RecommendedHqPrefix(HqController __instance)
+        {
+            if (!FreeHqWanted)
+                return true;
+            Plugin.Log.LogInfo("IFZVS Vorlage-Karte: festes HQ übersprungen, freie HQ-Wahl");
+            try { (HqSetterField?.GetValue(__instance) as HqSetterController)?.HandleOnMapGenerated(null); }
+            catch (System.Exception e) { Plugin.Log.LogWarning("IFZVS freie HQ-Wahl vorbereiten: " + e.Message); }
+            return false;
+        }
+
+        private static void LatLonHqPostfix(ref Gameplay.Buildings.Building __result)
+        {
+            if (__result != null && FreeHqWanted)
+                __result = null;
+        }
+
         public static void Apply(Harmony harmony)
         {
             // HQ-Wahl (privat, über PopupButtonSettings-Delegate aufgerufen)
@@ -41,6 +74,9 @@ namespace IfzCoop.Versus
             // Verstecke nicht an Gast-HQs (protected virtual)
             TryPatch(harmony, typeof(HideoutSpawnPointSpawner), "IsToCloseHq", null, nameof(IsToCloseHqPostfix));
             TryPatch(harmony, typeof(Gameplay.Buildings.Building), "UpdateStorage", null, nameof(HqStoragePostfix));
+            // Vorlage-Karten: kein vorgegebenes HQ im Versus
+            TryPatch(harmony, typeof(HqController), "ChooseHqForRecommendedPlaces", nameof(RecommendedHqPrefix), null);
+            TryPatch(harmony, typeof(MapEssentials.Map), "GetLatLonHq", null, nameof(LatLonHqPostfix));
             TryPatch(harmony, typeof(Gameplay.Buildings.Building), "UpdateProduction", null, nameof(HqStoragePostfix));
 
             // Tempo und Pause nur vom Host
