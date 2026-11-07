@@ -365,6 +365,19 @@ namespace IfzCoop
             TryPatch(harmony, typeof(Character), "SubtractHp", nameof(ImmortalPrefix));
             // Entwickler-Menü: unzerstörbare Fahrzeuge (CheatWindow.Indestructible), nur das gewählte Fahrzeug
             TryPatch(harmony, typeof(Vehicle), "SubtractHp", nameof(VehicleHpPrefix));
+            // Entwickler-Menü: schneller plündern je Trupp (CheatWindow.ScavBoost), Sofort töten (OneHit/OneHitAll)
+            TryPatch(harmony, typeof(ScavengeWork), "Execute", nameof(ScavBoostPrefix));
+            TryPatch(harmony, typeof(Vehicle), "UpdateMaxSpeed", null, nameof(VehicleSpeedPostfix));
+            TryPatch(harmony, typeof(Gameplay.Units.Movements.Movement), "CalculateSpeed", null, nameof(WalkPostfix));
+            try
+            {
+                foreach (var m in AccessTools.GetDeclaredMethods(typeof(Character)).Where(x => x.Name == "ReceiveDamage"))
+                {
+                    harmony.Patch(m, prefix: new HarmonyMethod(typeof(UnitPatches), nameof(OneHitPrefix)) { priority = Priority.Last });
+                    Applied++;
+                }
+            }
+            catch (Exception e) { Plugin.Log.LogWarning("IFZCOOP Sofort-töten-Haken nicht gesetzt: " + e.Message); }
             TryPatch(harmony, typeof(SquadsCreator), "ReplenishGroup", nameof(LocalSquadCreationPrefix));
             // Prefix, nicht Postfix: danach ist die Figur schon aus ihrem Trupp und gilt weder als Soldat noch Arbeiter.
             TryPatch(harmony, typeof(Character), "DestroyCharacter", nameof(DestroyCharacterPrefix));
@@ -459,6 +472,53 @@ namespace IfzCoop
             var s = CurrentSession;
             if (s != null && s.Role != Role.Guest && !UnitSync.NetApplying)
                 s.Stats?.AddForActor(Sync.StatsSync.Stat.Squads);
+        }
+
+        // Movement.CalculateSpeed(...) → Weg pro Bild; Lauftempo je Trupp (CheatWindow.WalkByMovement)
+        private static void WalkPostfix(Gameplay.Units.Movements.Movement __instance, ref float __result)
+        {
+            if (CheatWindow.WalkByMovement.Count == 0 || __instance == null) return;
+            if (CheatWindow.WalkByMovement.TryGetValue(__instance, out float f)) __result *= f;
+        }
+
+        // Vehicle.UpdateMaxSpeed(): Tempo je Fahrzeug (CheatWindow.SpeedBoost, 0.5 bis 5)
+        private static void VehicleSpeedPostfix(Vehicle __instance)
+        {
+            if (CheatWindow.SpeedBoost.Count == 0 || __instance == null || string.IsNullOrEmpty(__instance.Id)) return;
+            if (CheatWindow.SpeedBoost.TryGetValue(__instance.Id, out float f) && Mathf.Abs(f - 1f) > 0.01f && __instance.Movement != null)
+                __instance.Movement.MaxSpeed *= f;
+        }
+
+        // ScavengeWork.Execute(Character character, float timeToAdd)
+        private static void ScavBoostPrefix(Character character, ref float timeToAdd)
+        {
+            if (CheatWindow.ScavBoost.Count == 0 || character == null) return;
+            var g = character.Group;
+            if (g != null && !string.IsNullOrEmpty(g.Id) && CheatWindow.ScavBoost.TryGetValue(g.Id, out float f) && f > 1f)
+                timeToAdd *= f;
+        }
+
+        // Character.ReceiveDamage(Weapon attackedWith, float dmg, SubtractionHpReason reason, IDamageApplier damageApplier)
+        // Sofort töten: Gegner eines markierten Spieler-Trupps verliert beim Treffer alles (auch durch Schutzkleidung).
+        private static bool OneHitPrefix(Character __instance, Gameplay.Units.Equipment.Weapon attackedWith, Gameplay.Units.SubtractionHpReason reason,
+            Gameplay.Units.Interfaces.IDamageApplier damageApplier, ref bool __result)
+        {
+            if (!CheatWindow.OneHitAll && CheatWindow.OneHit.Count == 0) return true;
+            try
+            {
+                if (__instance == null || __instance.IsDead()) return true;
+                if (__instance.Group != null && __instance.Group.Fraction == Fraction.Player) return true; // nur Gegner
+                var g = Sync.StatsSync.AttackerGroup(damageApplier);
+                if (g == null || g.Fraction != Fraction.Player) return true;
+                if (!CheatWindow.OneHitAll && (string.IsNullOrEmpty(g.Id) || !CheatWindow.OneHit.Contains(g.Id))) return true;
+                __instance.SubtractHp(1000000f, reason, attackedWith);
+                __result = true;
+                return false;
+            }
+            catch
+            {
+                return true;
+            }
         }
 
         // Vehicle.SubtractHp(float amount, SubtractionHpReason deathReason, Weapon weapon)

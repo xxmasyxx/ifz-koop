@@ -276,6 +276,49 @@ namespace IfzCoop
                 case "instantmake":
                     InstantMake = a[1] == "1";
                     return InstantMake ? "Sofort herstellen AN" : "Sofort herstellen AUS";
+                case "onehitall":
+                    OneHitAll = a[1] == "1";
+                    return OneHitAll ? "Sofort töten AN (alle Trupps)" : "Sofort töten für alle AUS";
+                case "sqwalk":
+                {
+                    var groups = SquadsById(a[1].Split(',')).ToList();
+                    if (groups.Count == 0) return "Trupp nicht gefunden";
+                    float pct = Mathf.Clamp(float.Parse(a[2], inv), 50f, 500f);
+                    foreach (var g in groups)
+                    {
+                        if (Mathf.Abs(pct - 100f) < 1f) WalkBoost.Remove(g.Id); else WalkBoost[g.Id] = pct / 100f;
+                    }
+                    RebuildWalk();
+                    return $"Lauftempo {pct:0} % ({string.Join(", ", groups.Select(g => SquadName(g.Id)))})";
+                }
+                case "sqscav":
+                case "sqonehit":
+                {
+                    var groups = SquadsById(a[1].Split(',')).ToList();
+                    if (groups.Count == 0) return "Trupp nicht gefunden";
+                    string names = string.Join(", ", groups.Select(g => SquadName(g.Id)));
+                    if (a[0] == "sqscav")
+                    {
+                        float pct = Mathf.Clamp(float.Parse(a[2], inv), 0f, 500f);
+                        foreach (var g in groups)
+                        {
+                            if (pct < 1f) ScavBoost.Remove(g.Id); else ScavBoost[g.Id] = 1f + pct / 100f;
+                        }
+                        return pct < 1f ? $"Plündern normal ({names})" : $"Plündern +{pct:0} % schneller ({names})";
+                    }
+                    bool on = a[2] == "1";
+                    foreach (var g in groups) { if (on) OneHit.Add(g.Id); else OneHit.Remove(g.Id); }
+                    return $"Sofort töten {(on ? "AN" : "AUS")} ({names})";
+                }
+                case "vspeed":
+                {
+                    var v = FindVehicle(a[1]);
+                    if (v == null) return "Fahrzeug nicht gefunden";
+                    float pct = Mathf.Clamp(float.Parse(a[2], inv), 50f, 500f);
+                    if (Mathf.Abs(pct - 100f) < 1f) SpeedBoost.Remove(v.Id); else SpeedBoost[v.Id] = pct / 100f;
+                    v.UpdateMaxSpeed();
+                    return VehicleLabel(v.Data.GetVehicleType()) + $": Tempo {pct:0} %";
+                }
                 case "sqskill":
                 case "sqweapon":
                 case "sqgear":
@@ -409,6 +452,11 @@ namespace IfzCoop
             if (InstantBuild) on.Add("Sofort bauen");
             foreach (var f in FlagDefs) if (FlagOn(f.key)) on.Add(f.label);
             if (InstantMake) on.Add("Sofort herstellen");
+            if (OneHitAll) on.Add("Sofort töten (alle)");
+            else if (OneHit.Count > 0) on.Add("Sofort töten (" + OneHit.Count + (OneHit.Count == 1 ? " Trupp)" : " Trupps)"));
+            if (WalkBoost.Count > 0) on.Add(WalkBoost.Count + (WalkBoost.Count == 1 ? " Trupp" : " Trupps") + " mit anderem Lauftempo");
+            if (ScavBoost.Count > 0) on.Add(ScavBoost.Count + (ScavBoost.Count == 1 ? " Trupp" : " Trupps") + " plündert schneller");
+            if (SpeedBoost.Count > 0) on.Add(SpeedBoost.Count + (SpeedBoost.Count == 1 ? " Fahrzeug" : " Fahrzeuge") + " mit anderem Tempo");
             if (Immortal.Count > 0) on.Add(Immortal.Count + (Immortal.Count == 1 ? " Trupp" : " Trupps") + " unsterblich");
             if (Indestructible.Count > 0) on.Add(Indestructible.Count + (Indestructible.Count == 1 ? " Fahrzeug" : " Fahrzeuge") + " unzerstörbar");
             return on.Count == 0 ? "keine Schalter an" : string.Join(", ", on);
@@ -445,9 +493,14 @@ namespace IfzCoop
         /// <summary>Jedes Bild: Sofort-Bauen.</summary>
         public void Update()
         {
+            float now = Time.realtimeSinceStartup;
+            if (WalkBoost.Count > 0 && now >= _nextWalkRebuild && !IsGuest)
+            {
+                _nextWalkRebuild = now + 2f; // neue Mitglieder, Wechsel im Trupp
+                try { RebuildWalk(); } catch { }
+            }
             if ((!InstantBuild && !InstantMake) || !Allowed || IsGuest)
                 return; // Sofort-Bauen/-Herstellen rechnet nur der Host
-            float now = Time.realtimeSinceStartup;
             if (now < _nextInstant)
                 return;
             _nextInstant = now + InstantInterval;
@@ -684,6 +737,50 @@ namespace IfzCoop
 
         /// <summary>Unzerstörbare Fahrzeuge (Vehicle.Id). UnitPatches.VehicleHpPrefix auf Vehicle.SubtractHp.</summary>
         public static readonly HashSet<string> Indestructible = new HashSet<string>();
+
+        /// <summary>Plündern schneller je Trupp (Group.Id → Faktor, 1 = normal). UnitPatches.ScavBoostPrefix.</summary>
+        public static readonly Dictionary<string, float> ScavBoost = new Dictionary<string, float>();
+
+        /// <summary>Sofort töten: diese Trupps (Group.Id) bzw. alle Trupps. UnitPatches.OneHitPrefix.</summary>
+        public static readonly HashSet<string> OneHit = new HashSet<string>();
+        public static bool OneHitAll;
+
+        /// <summary>Tempo je Fahrzeug (Vehicle.Id → Faktor). UnitPatches.VehicleSpeedPostfix.</summary>
+        public static readonly Dictionary<string, float> SpeedBoost = new Dictionary<string, float>();
+
+        /// <summary>Lauftempo je Trupp (Group.Id → Faktor) und daraus je Figur (Movement → Faktor) für UnitPatches.WalkPostfix.</summary>
+        public static readonly Dictionary<string, float> WalkBoost = new Dictionary<string, float>();
+        public static readonly Dictionary<Gameplay.Units.Movements.Movement, float> WalkByMovement = new Dictionary<Gameplay.Units.Movements.Movement, float>();
+        private static float _nextWalkRebuild;
+
+        public static void RebuildWalk()
+        {
+            WalkByMovement.Clear();
+            if (WalkBoost.Count == 0) return;
+            foreach (var g in SquadsById(WalkBoost.Keys.ToList()))
+            {
+                float f = WalkBoost[g.Id];
+                foreach (var c in g.Characters)
+                    if (c != null && c.Movement != null) WalkByMovement[c.Movement] = f;
+            }
+        }
+
+        public static void ResetGameOnly()
+        {
+            if (WalkBoost.Count > 0) { WalkBoost.Clear(); WalkByMovement.Clear(); }
+            InstantBuild = false;
+            InstantMake = false;
+            OneHitAll = false;
+            if (Immortal.Count > 0) Immortal.Clear();
+            if (Indestructible.Count > 0) Indestructible.Clear();
+            if (ScavBoost.Count > 0) ScavBoost.Clear();
+            if (OneHit.Count > 0) OneHit.Clear();
+            if (SpeedBoost.Count > 0) SpeedBoost.Clear();
+        }
+
+        private float _scavPct = 100f;
+        private float _walkPct = 200f;
+        private float _speedPct = 200f;
 
         private static readonly HarmonyLib.AccessTools.FieldRef<Gameplay.Buildings.Building, Gameplay.Buildings.GarageHandler> GarageRef =
             HarmonyLib.AccessTools.FieldRefAccess<Gameplay.Buildings.Building, Gameplay.Buildings.GarageHandler>("GarageHandler");
@@ -966,12 +1063,18 @@ namespace IfzCoop
 
         private void DrawFlags()
         {
-            Section("Dauer-Schalter (bleiben an, bis du sie ausmachst)", FlagDefs.Select(f => f.label).Concat(new[] { "Sofort bauen", "Sofort herstellen" }).ToArray());
+            Section("Dauer-Schalter (bleiben an, bis du sie ausmachst)", FlagDefs.Select(f => f.label).Concat(new[] { "Sofort bauen", "Sofort herstellen", "Sofort töten" }).ToArray());
             if (Match("Sofort bauen"))
             {
                 bool now = GUILayout.Toggle(InstantBuild, " Sofort bauen  (jede Baustelle wird gleich fertig, nur in diesem Spiel)");
                 if (now != InstantBuild)
                     Run("instant " + (now ? "1" : "0"));
+            }
+            if (Match("Sofort töten"))
+            {
+                bool now = GUILayout.Toggle(OneHitAll, " Sofort töten  (jeder Treffer deiner Trupps tötet; nur in diesem Spiel)");
+                if (now != OneHitAll)
+                    Run("onehitall " + (now ? "1" : "0"));
             }
             if (Match("Sofort herstellen"))
             {
@@ -1278,7 +1381,7 @@ namespace IfzCoop
             Btn("Munition auffüllen (je 100)", "ammo");
             GUILayout.EndHorizontal();
 
-            Section("Ausgewählte Trupps", "Ausgewählte heilen", "Unsterblich an", "Unsterblich aus", "Alle wieder sterblich");
+            Section("Ausgewählte Trupps", "Ausgewählte heilen", "Unsterblich an", "Unsterblich aus", "Alle wieder sterblich", "Sofort töten", "Plündern schneller", "Lauftempo", "Fähigkeiten");
             if (!Searching)
             {
                 GUILayout.Label(_selIds.Count == 0
@@ -1295,6 +1398,42 @@ namespace IfzCoop
                 GUILayout.EndHorizontal();
 
                 var groups = SquadsById(_selIds).ToList();
+
+                // Sofort töten nur für diese Trupps
+                if (Match("Sofort töten"))
+                {
+                    bool allOne = groups.Count > 0 && groups.All(g => OneHit.Contains(g.Id));
+                    GUILayout.BeginHorizontal();
+                    Btn(allOne ? "Sofort töten: AN (Klick = aus)" : "Sofort töten (nur diese Trupps)", "sqonehit " + ids + (allOne ? " 0" : " 1"));
+                    GUILayout.EndHorizontal();
+                }
+                // Plündern schneller: Schieberegler 0–500 %
+                if (Match("Plündern schneller"))
+                {
+                    float cur = 0f;
+                    foreach (var g in groups) if (ScavBoost.TryGetValue(g.Id, out var f)) cur = Mathf.Max(cur, (f - 1f) * 100f);
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Label($"Plündern schneller: +{_scavPct:0} %", GUILayout.Width(190f));
+                    _scavPct = Mathf.Round(GUILayout.HorizontalSlider(_scavPct, 0f, 500f, GUILayout.Width(220f)) / 10f) * 10f;
+                    if (GUILayout.Button(new GUIContent("Übernehmen", "Gilt nur für die ausgewählten Trupps. 0 % = normal."), GUILayout.Width(100f)))
+                        Run($"sqscav {ids} {_scavPct.ToString("0", System.Globalization.CultureInfo.InvariantCulture)}");
+                    GUILayout.EndHorizontal();
+                    if (!Searching) GUILayout.Label(cur > 0f ? $"Jetzt: +{cur:0} % schneller" : "Jetzt: normal", _hint);
+                }
+                // Lauftempo: 50–500 %
+                if (Match("Lauftempo"))
+                {
+                    float curW = 100f;
+                    foreach (var g in groups) if (WalkBoost.TryGetValue(g.Id, out var wf)) curW = wf * 100f;
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Label($"Lauftempo: {_walkPct:0} %", GUILayout.Width(190f));
+                    _walkPct = Mathf.Round(GUILayout.HorizontalSlider(_walkPct, 50f, 500f, GUILayout.Width(220f)) / 10f) * 10f;
+                    if (GUILayout.Button(new GUIContent("Übernehmen", "Gilt nur für die ausgewählten Trupps (zu Fuß). 100 % = normal."), GUILayout.Width(100f)))
+                        Run($"sqwalk {ids} {_walkPct.ToString("0", System.Globalization.CultureInfo.InvariantCulture)}");
+                    GUILayout.EndHorizontal();
+                    if (!Searching) GUILayout.Label($"Jetzt: {curW:0} %", _hint);
+                }
+
                 // Fähigkeiten: Klick schaltet um (an, wenn noch nicht alle sie haben, sonst aus)
                 if (SkillDefs.Any(sd => Match(sd.label)) || Match("Fähigkeiten"))
                 {
@@ -1358,7 +1497,7 @@ namespace IfzCoop
 
         private void DrawVehicles()
         {
-            Section("Ausgewähltes Fahrzeug", "Reparieren und volltanken", "Unzerstörbar", "Umbauen", "Panzerung", "Turbo", "Schweres MG", "Panzerkanone", "Kofferraum", "Tank", "Rammschutz");
+            Section("Ausgewähltes Fahrzeug", "Reparieren und volltanken", "Unzerstörbar", "Tempo", "Geschwindigkeit", "Umbauen", "Panzerung", "Turbo", "Schweres MG", "Panzerkanone", "Kofferraum", "Tank", "Rammschutz");
             var v = FindVehicle(_selVehicle);
             if (!Searching)
                 GUILayout.Label(v == null
@@ -1379,6 +1518,22 @@ namespace IfzCoop
                     }
                 }
                 GUILayout.EndHorizontal();
+                if (Match("Tempo") || Match("Geschwindigkeit"))
+                {
+                    float curSpeed = SpeedBoost.TryGetValue(v.Id, out var sf) ? sf * 100f : 100f;
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Label($"Tempo: {_speedPct:0} %", GUILayout.Width(120f));
+                    _speedPct = Mathf.Round(GUILayout.HorizontalSlider(_speedPct, 50f, 500f, GUILayout.Width(250f)) / 10f) * 10f;
+                    if (GUILayout.Button(new GUIContent("Übernehmen", "Gilt nur für dieses Fahrzeug. 100 % = normal."), GUILayout.Width(100f)))
+                        Run($"vspeed {v.Id} {_speedPct.ToString("0", System.Globalization.CultureInfo.InvariantCulture)}");
+                    if (GUILayout.Button(new GUIContent("Normal", "Tempo zurück auf 100 %"), GUILayout.Width(70f)))
+                    {
+                        _speedPct = 100f;
+                        Run($"vspeed {v.Id} 100");
+                    }
+                    GUILayout.EndHorizontal();
+                    if (!Searching) GUILayout.Label($"Jetzt: {curSpeed:0} % (Höchstgeschwindigkeit)", _hint);
+                }
                 if (!Searching) GUILayout.Label("Umbauen (wie in der Werkstatt, sofort und kostenlos):", _hint);
                 int col = 0;
                 GUILayout.BeginHorizontal();

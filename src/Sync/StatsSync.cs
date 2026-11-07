@@ -106,7 +106,7 @@ namespace IfzCoop.Sync
             return who != 0UL ? who : Me;
         }
 
-        private static Group AttackerGroup(IDamageApplier applier)
+        internal static Group AttackerGroup(IDamageApplier applier)
         {
             switch (applier)
             {
