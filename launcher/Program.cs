@@ -30,6 +30,14 @@ namespace IfzCoop.Launcher
             catch { }
             // Testmodus ohne Fenster: --qa <Ausgabedatei> <Spielordner> [Version] [noself]
             var args = Environment.GetCommandLineArgs();
+            if (args.Length >= 4 && args[1] == "--qa-remove")
+            {
+                string res;
+                try { res = Game.RemoveMod(args[3]) + " installed=" + Game.Installed(args[3]); }
+                catch (Exception e) { res = "FEHLER " + e.Message; }
+                File.WriteAllText(args[2], res);
+                return;
+            }
             if (args.Length >= 3 && args[1] == "--shot")
             {
                 // Bild des Fensters, ohne es anzuzeigen (für Tests)
@@ -258,6 +266,51 @@ namespace IfzCoop.Launcher
             File.WriteAllText(path, text);
         }
 
+        /// <summary>Mod-Lader (Doorstop) an/aus. Aus = das Spiel startet ohne BepInEx.</summary>
+        public static void SetLoader(string dir, bool on)
+        {
+            string ini = Path.Combine(dir, "doorstop_config.ini");
+            if (!File.Exists(ini)) return;
+            string text = File.ReadAllText(ini);
+            File.WriteAllText(ini, Regex.Replace(text, @"(?m)^(\s*enabled\s*=\s*)(true|false)", "${1}" + (on ? "true" : "false")));
+        }
+
+        /// <summary>
+        /// Mod aus dem Spielordner entfernen: IfzCoop, Updater, Update-Notizen. BepInEx bleibt, wird aber ausgeschaltet,
+        /// wenn keine anderen Mods da sind (dann startet das Spiel wie ohne Mods). Spielstände bleiben.
+        /// </summary>
+        public static string RemoveMod(string dir)
+        {
+            var removed = new List<string>();
+            foreach (var sub in new[] { @"BepInEx\plugins\IfzCoop", @"BepInEx\patchers\IfzCoop" })
+            {
+                string p = Path.Combine(dir, sub);
+                if (!Directory.Exists(p)) continue;
+                Exception last = null;
+                for (int i = 0; i < 10; i++)
+                {
+                    try { Directory.Delete(p, true); last = null; break; }
+                    catch (Exception e) { last = e; System.Threading.Thread.Sleep(1000); }
+                }
+                if (last != null) throw new Exception("Konnte " + sub + " nicht löschen: " + last.Message);
+                removed.Add(sub);
+            }
+            foreach (var f in new[] { @"BepInEx\cache\ifzcoop-updated.txt", @"BepInEx\cache\ifzcoop-skipupdate-once", @"BepInEx\cache\ifzcoop-version.txt" })
+                try { File.Delete(Path.Combine(dir, f)); } catch { }
+
+            string plugins = Path.Combine(dir, @"BepInEx\plugins");
+            bool others = Directory.Exists(plugins) && Directory.EnumerateFileSystemEntries(plugins).Any();
+            string loader = "";
+            if (!others && File.Exists(Path.Combine(dir, "doorstop_config.ini")))
+            {
+                SetLoader(dir, false);
+                loader = " Mod-Lader ausgeschaltet, das Spiel startet jetzt ohne Mods.";
+            }
+            else if (others)
+                loader = " BepInEx bleibt an (andere Mods vorhanden).";
+            return (removed.Count > 0 ? "Mod entfernt." : "Die Mod war nicht installiert.") + loader;
+        }
+
         public static void SkipUpdateOnce(string dir)
         {
             string cache = Path.Combine(dir, @"BepInEx\cache");
@@ -296,6 +349,9 @@ namespace IfzCoop.Launcher
         private readonly Button _install = new Button();
         private readonly TextBox _notes = new TextBox();
         private readonly CheckBox _auto = new CheckBox();
+        private readonly CheckBox _removeAfter = new CheckBox();
+        private readonly Button _removeNow = new Button();
+        private System.Threading.CancellationTokenSource _wait;
         private bool _loadingAuto;
 
         private string _dir;
@@ -305,7 +361,7 @@ namespace IfzCoop.Launcher
         public LauncherForm()
         {
             Text = "IFZ Koop";
-            ClientSize = new Size(640, 600);
+            ClientSize = new Size(640, 650);
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
@@ -372,13 +428,36 @@ namespace IfzCoop.Launcher
                 catch (Exception ex) { SetStatus("Einstellung nicht gespeichert: " + ex.Message, true); }
             };
 
-            _status.SetBounds(28, 522, 590, 42);
+            _removeAfter.Text = "Nach dem Spielen die Mod wieder entfernen (Launcher bleibt offen und wartet)";
+            _removeAfter.ForeColor = Text1;
+            _removeAfter.AutoSize = true;
+            _removeAfter.Location = new Point(26, 518);
+            _removeAfter.CheckedChanged += (s, e) =>
+            {
+                if (!_removeAfter.Checked && _wait != null) _wait.Cancel();
+            };
+
+            _status.SetBounds(28, 550, 590, 42);
             _status.ForeColor = Text2;
 
-            var link = new LinkLabel { Text = "Projekt auf GitHub", AutoSize = true, Location = new Point(26, 570), LinkColor = Green, ActiveLinkColor = Color.White };
+            var link = new LinkLabel { Text = "Projekt auf GitHub", AutoSize = true, Location = new Point(26, 612), LinkColor = Green, ActiveLinkColor = Color.White };
             link.LinkClicked += (s, e) => Process.Start(new ProcessStartInfo("https://github.com/" + GitHub.Repo) { UseShellExecute = true });
 
-            Controls.AddRange(new Control[] { title, sub, _info, _playNewest, _play, other, _versions, _install, _notes, _auto, _status, link });
+            StyleButton(_removeNow, Panel, Color.FromArgb(255, 140, 130), 9.5f, FontStyle.Regular);
+            _removeNow.Text = "Mod jetzt entfernen";
+            _removeNow.SetBounds(456, 604, 160, 30);
+            _removeNow.Click += async (s, e) => await RemoveNow();
+
+            FormClosing += (s, e) =>
+            {
+                if (_wait == null || _wait.IsCancellationRequested) return;
+                if (MessageBox.Show(this, "Der Launcher wartet noch auf das Spielende, um die Mod zu entfernen.\r\nWenn du ihn jetzt schließt, bleibt die Mod installiert. Trotzdem schließen?",
+                        "IFZ Koop", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                    e.Cancel = true;
+                else _wait.Cancel();
+            };
+
+            Controls.AddRange(new Control[] { title, sub, _info, _playNewest, _play, other, _versions, _install, _notes, _auto, _removeAfter, _status, link, _removeNow });
             Shown += async (s, e) => await LoadAll();
         }
 
@@ -420,7 +499,8 @@ namespace IfzCoop.Launcher
             _install.Enabled = ok && _versions.SelectedItem != null;
             _versions.Enabled = !busy;
             _auto.Enabled = ok;
-            UseWaitCursor = busy;
+            _removeNow.Enabled = ok && Game.Installed(_dir) != null;
+            UseWaitCursor = busy && _wait == null;
         }
 
         private void RefreshInfo()
@@ -523,9 +603,79 @@ namespace IfzCoop.Launcher
             SetStatus(msg);
             try { Game.Start(); }
             catch (Exception ex) { SetStatus("Steam ließ sich nicht starten: " + ex.Message, true); return; }
+            if (_removeAfter.Checked)
+            {
+                _ = WaitAndRemove();
+                return;
+            }
             var t = new Timer { Interval = 2500 };
             t.Tick += (s, e) => { t.Stop(); Close(); };
             t.Start();
+        }
+
+        /// <summary>Wartet, bis das Spiel gestartet und wieder beendet ist, dann Mod entfernen.</summary>
+        private async Task WaitAndRemove()
+        {
+            _wait = new System.Threading.CancellationTokenSource();
+            var ct = _wait.Token;
+            SetBusy(true);
+            _removeAfter.Enabled = true; // Haken weg = Warten abbrechen
+            SetStatus("Warte auf den Spielstart ...");
+            var t0 = DateTime.Now;
+            bool seen = false;
+            try
+            {
+                while (!ct.IsCancellationRequested)
+                {
+                    bool run = Game.IsRunning();
+                    if (run && !seen)
+                    {
+                        seen = true;
+                        SetStatus("Das Spiel läuft. Sobald du es beendest, entfernt der Launcher die Mod. Dieses Fenster bitte offen lassen.");
+                        WindowState = FormWindowState.Minimized;
+                    }
+                    if (!run && seen) break;
+                    if (!seen && (DateTime.Now - t0).TotalMinutes > 5)
+                    {
+                        SetStatus("Das Spiel ist nicht gestartet, die Mod bleibt installiert.", true);
+                        return;
+                    }
+                    await Task.Delay(3000);
+                }
+                if (ct.IsCancellationRequested)
+                {
+                    SetStatus("Entfernen abgebrochen, die Mod bleibt installiert.");
+                    return;
+                }
+                SetStatus("Spiel beendet, entferne die Mod ...");
+                await Task.Delay(3000); // Dateien freigeben lassen
+                string res = await Task.Run(() => Game.RemoveMod(_dir));
+                SetStatus(res);
+                WindowState = FormWindowState.Normal;
+                Activate();
+            }
+            catch (Exception ex)
+            {
+                SetStatus("Entfernen hat nicht geklappt: " + ex.Message, true);
+                WindowState = FormWindowState.Normal;
+            }
+            finally
+            {
+                _wait = null;
+                RefreshInfo();
+                SetBusy(false);
+            }
+        }
+
+        private async Task RemoveNow()
+        {
+            if (_dir == null || !CheckNotRunning()) return;
+            if (MessageBox.Show(this, "IFZ Koop aus dem Spiel entfernen?\r\n\r\nSpielstände bleiben. Mit \"Neueste Version holen und spielen\" ist die Mod jederzeit wieder da.",
+                    "IFZ Koop", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
+            SetBusy(true);
+            try { SetStatus(await Task.Run(() => Game.RemoveMod(_dir))); }
+            catch (Exception ex) { SetStatus("Entfernen hat nicht geklappt: " + ex.Message, true); }
+            finally { RefreshInfo(); SetBusy(false); }
         }
 
         /// <summary>Lädt die Dateien einer Version von GitHub, prüft SHA-256 und legt sie ins Spiel. Ohne BepInEx erst den Installer.</summary>
@@ -601,6 +751,7 @@ namespace IfzCoop.Launcher
 
             string target = Game.PluginDll(_dir);
             Directory.CreateDirectory(Path.GetDirectoryName(target));
+            Game.SetLoader(_dir, true); // falls die Mod vorher entfernt (Lader aus) war
             if (File.Exists(target)) File.Copy(target, target + ".bak", true);
             File.Copy(plugin, target, true);
             if (updater != null)

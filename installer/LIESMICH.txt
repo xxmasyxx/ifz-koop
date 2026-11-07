@@ -15,6 +15,9 @@ Launcher (ab 0.23.4)
   - "Spielen ohne Update": startet mit der installierten Version.
   - "Andere Version waehlen": Liste aller Versionen mit ihren Aenderungen, "Installieren".
     Bei einer aelteren Version wird das Auto-Update ausgeschaltet (Haken unten).
+  - Haken "Nach dem Spielen die Mod wieder entfernen": der Launcher bleibt offen, wartet bis das
+    Spiel beendet ist und entfernt dann die Mod (BepInEx wird ausgeschaltet, Spielstaende bleiben).
+    Knopf "Mod jetzt entfernen" macht das sofort. "Neueste Version holen und spielen" bringt alles zurueck.
   - Die exe geht auch allein (installiert dann BepInEx und den Mod selbst):
     https://github.com/xxmasyxx/ifz-koop/releases/latest/download/IfzCoop-Launcher.exe
     Windows warnt beim ersten Start eventuell ("Der Computer wurde durch Windows geschuetzt"):
