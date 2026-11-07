@@ -515,14 +515,10 @@ namespace IfzCoop
         // ScavengeWork.Execute(Character character, float timeToAdd)
         private static void ScavBoostPrefix(Character character, ref float timeToAdd)
         {
-            if ((CheatWindow.ScavBoost.Count == 0 && CheatWindow.ScavBoostAll <= 1.001f) || character == null) return;
+            if (CheatWindow.ScavBoost.Count == 0 || character == null) return;
             var g = character.Group;
-            if (g != null && !string.IsNullOrEmpty(g.Id) && CheatWindow.ScavBoost.TryGetValue(g.Id, out float f))
-            {
-                if (f > 1f) timeToAdd *= f;
-            }
-            else if (CheatWindow.ScavBoostAll > 1.001f && (g == null || g.Fraction == Fraction.Player))
-                timeToAdd *= CheatWindow.ScavBoostAll;
+            if (g != null && !string.IsNullOrEmpty(g.Id) && CheatWindow.ScavBoost.TryGetValue(g.Id, out float f) && f > 1f)
+                timeToAdd *= f;
         }
 
         // Character.ReceiveDamage(Weapon attackedWith, float dmg, SubtractionHpReason reason, IDamageApplier damageApplier)

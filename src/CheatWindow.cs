@@ -305,12 +305,6 @@ namespace IfzCoop
                 case "instantmake":
                     InstantMake = a[1] == "1";
                     return InstantMake ? "Sofort herstellen AN" : "Sofort herstellen AUS";
-                case "scavall":
-                {
-                    float pct = Mathf.Clamp(float.Parse(a[1], inv), 0f, 10000f);
-                    ScavBoostAll = 1f + pct / 100f;
-                    return pct < 1f ? "Plündern für alle normal" : $"Plündern für alle +{pct:0} % schneller";
-                }
                 case "instantdemolish":
                     InstantDemolish = a[1] == "1";
                     return InstantDemolish ? "Sofort abbauen AN" : "Sofort abbauen AUS";
@@ -501,7 +495,6 @@ namespace IfzCoop
             foreach (var f in FlagDefs) if (FlagOn(f.key)) on.Add(f.label);
             if (InstantMake) on.Add("Sofort herstellen");
             if (InstantDemolish) on.Add("Sofort abbauen");
-            if (ScavBoostAll > 1.001f) on.Add($"Plündern +{(ScavBoostAll - 1f) * 100f:0} % (alle)");
             if (OneHitAll) on.Add("Sofort töten (alle)");
             else if (OneHit.Count > 0) on.Add("Sofort töten (" + OneHit.Count + (OneHit.Count == 1 ? " Trupp)" : " Trupps)"));
             if (WalkBoost.Count > 0) on.Add(WalkBoost.Count + (WalkBoost.Count == 1 ? " Trupp" : " Trupps") + " mit anderem Lauftempo");
@@ -890,7 +883,6 @@ namespace IfzCoop
             InstantBuild = false;
             InstantMake = false;
             InstantDemolish = false;
-            ScavBoostAll = 1f;
             OneHitAll = false;
             if (Immortal.Count > 0) Immortal.Clear();
             if (Indestructible.Count > 0) Indestructible.Clear();
@@ -932,10 +924,6 @@ namespace IfzCoop
 
         /// <summary>„Sofort abbauen“: Abbau/Rückbau von Häusern und Anlagen, Fahrzeuge zerlegen in der Werkstatt.</summary>
         public static bool InstantDemolish;
-
-        /// <summary>Plündern schneller für alle Spieler-Trupps (Faktor, 1 = normal); einzelne Trupps (ScavBoost) gehen vor.</summary>
-        public static float ScavBoostAll = 1f;
-        private float _scavAllPct = 0f;
 
         private static int DemolishAllNow()
         {
@@ -1267,7 +1255,7 @@ namespace IfzCoop
 
         private void DrawFlags()
         {
-            Section("Dauer-Schalter (bleiben an, bis du sie ausmachst)", FlagDefs.Select(f => f.label).Concat(new[] { "Sofort bauen", "Sofort herstellen", "Sofort töten", "Sofort abbauen", "Plündern schneller" }).ToArray());
+            Section("Dauer-Schalter (bleiben an, bis du sie ausmachst)", FlagDefs.Select(f => f.label).Concat(new[] { "Sofort bauen", "Sofort herstellen", "Sofort töten", "Sofort abbauen" }).ToArray());
             if (Match("Sofort bauen"))
             {
                 bool now = GUILayout.Toggle(InstantBuild, " Sofort bauen  (jede Baustelle wird gleich fertig, nur in diesem Spiel)");
@@ -1279,16 +1267,6 @@ namespace IfzCoop
                 bool now = GUILayout.Toggle(OneHitAll, " Sofort töten  (jeder Treffer deiner Trupps tötet; nur in diesem Spiel)");
                 if (now != OneHitAll)
                     Run("onehitall " + (now ? "1" : "0"));
-            }
-            if (Match("Plündern schneller"))
-            {
-                GUILayout.BeginHorizontal();
-                GUILayout.Label(" Plündern schneller (alle Trupps): +", GUILayout.Width(230f));
-                _scavAllPct = SliderField("scavall", _scavAllPct, 0f, 500f, 10000f, 160f);
-                if (GUILayout.Button(new GUIContent("Übernehmen", "Gilt für alle Trupps ohne eigene Einstellung. 0 % = normal. „Schnell plündern“ oben = sofort."), GUILayout.Width(100f)))
-                    Run("scavall " + _scavAllPct.ToString("0", System.Globalization.CultureInfo.InvariantCulture));
-                GUILayout.EndHorizontal();
-                if (!Searching) GUILayout.Label(ScavBoostAll > 1.001f ? $"   Jetzt: +{(ScavBoostAll - 1f) * 100f:0} % für alle" : "   Jetzt: normal", _hint);
             }
             if (Match("Sofort abbauen"))
             {
