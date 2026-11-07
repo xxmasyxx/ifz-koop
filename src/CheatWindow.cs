@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Controllers;
@@ -42,7 +42,31 @@ namespace IfzCoop
 
         public int GuestRequests { get; private set; }
 
-        private static readonly string[] Tabs = { "Schalter", "Lager & Waffen", "Basis & Bewohner", "Forschung", "Trupps & Kampf", "Welt & Zeit" };
+        private static readonly string[] Tabs = { "Schalter", "Lager & Waffen", "Basis & Bewohner", "Forschung", "Trupps & Kampf", "Fahrzeuge", "Welt & Zeit" };
+
+        // Fahrzeuge (Reiter „Fahrzeuge“): Umbauten wie in der Werkstatt, Fahrzeug per Klick auf die Karte erzeugen
+        private static readonly (Gameplay.Vehicles.ModificationType mod, string label)[] Mods =
+        {
+            (Gameplay.Vehicles.ModificationType.ve_mod_trunk, "Großer Kofferraum"),
+            (Gameplay.Vehicles.ModificationType.ve_mod_armor, "Panzerung"),
+            (Gameplay.Vehicles.ModificationType.ve_mod_turbine, "Turbo"),
+            (Gameplay.Vehicles.ModificationType.ve_mod_tank, "Großer Tank"),
+            (Gameplay.Vehicles.ModificationType.ve_mod_ram, "Rammschutz"),
+            (Gameplay.Vehicles.ModificationType.ve_mod_hcal, "Schweres MG"),
+            (Gameplay.Vehicles.ModificationType.ve_mod_tank_cannon, "Panzerkanone"),
+        };
+
+        private static readonly (Gameplay.Vehicles.VehicleType type, string label)[] VehicleTypes =
+        {
+            (Gameplay.Vehicles.VehicleType.ve_minicar, "Kleinwagen"), (Gameplay.Vehicles.VehicleType.ve_sedan, "Limousine"),
+            (Gameplay.Vehicles.VehicleType.ve_combi, "Kombi"), (Gameplay.Vehicles.VehicleType.ve_sport_car, "Sportwagen"),
+            (Gameplay.Vehicles.VehicleType.ve_suv, "Geländewagen"), (Gameplay.Vehicles.VehicleType.ve_pickup, "Pick-up"),
+            (Gameplay.Vehicles.VehicleType.ve_van, "Transporter"), (Gameplay.Vehicles.VehicleType.ve_truck, "Lastwagen"),
+            (Gameplay.Vehicles.VehicleType.ve_cistern, "Tankwagen"), (Gameplay.Vehicles.VehicleType.ve_bus, "Bus"),
+            (Gameplay.Vehicles.VehicleType.ve_bus_school, "Schulbus"), (Gameplay.Vehicles.VehicleType.ve_bus_coach, "Reisebus"),
+            (Gameplay.Vehicles.VehicleType.ve_armoured_transport, "Panzerwagen"), (Gameplay.Vehicles.VehicleType.ve_command, "Kommandofahrzeug"),
+            (Gameplay.Vehicles.VehicleType.ve_tank, "Panzer"),
+        };
 
         // Dauer-Schalter des Spiels (SaveHandler.SaveData, wie die Konsolen-Befehle der Entwickler)
         private static readonly (string key, string label, string hint)[] FlagDefs =
@@ -233,6 +257,10 @@ namespace IfzCoop
                 }
                 case "bld":
                     return BuildingCmd(a[1], long.Parse(a[2], inv));
+                case "vmod":
+                case "vfix":
+                case "vspawn":
+                    return VehicleCmd(a);
                 case "healsel":
                 {
                     var groups = SquadsById(a[1].Split(',')).ToList();
@@ -430,6 +458,7 @@ namespace IfzCoop
                 {
                     _selIds = CurrentSelection();
                     _selBuilding = _session.Presence?.CurrentBuildingId() ?? 0;
+                    _selVehicle = CurrentVehicleId();
                 }
             }
             _rect = GUILayout.Window(WindowId, _rect, DrawContents, IsGuest ? "Entwickler-Menü (Gast, der Host führt aus)" : "Entwickler-Menü");
@@ -442,6 +471,110 @@ namespace IfzCoop
 
         private List<string> _selIds = new List<string>();
         private long _selBuilding;
+        private string _selVehicle;
+        private int _spawnIdx;
+        private Controllers.InfoPanelController _infoPanel;
+
+        private static readonly HarmonyLib.AccessTools.FieldRef<Controllers.VehiclesController, Gameplay.Vehicles.Vehicle.Factory> VehicleFactory =
+            HarmonyLib.AccessTools.FieldRefAccess<Controllers.VehiclesController, Gameplay.Vehicles.Vehicle.Factory>("_vehicleFactory");
+
+        /// <summary>Angeklicktes Fahrzeug (Fahrzeug-Fenster offen) oder das Fahrzeug des ersten ausgewählten Trupps.</summary>
+        private string CurrentVehicleId()
+        {
+            try
+            {
+                if (_infoPanel == null) _infoPanel = UnityEngine.Object.FindObjectOfType<Controllers.InfoPanelController>();
+                if (_infoPanel != null && _infoPanel.CurrentDisplayedPanel is UI.InfoPanels.AbandonedVehiclePanelInfo p)
+                {
+                    var v = p.GetCurrentVehicle();
+                    if (v != null && !string.IsNullOrEmpty(v.Id)) return v.Id;
+                }
+                var sel = GameAccess.Game<SquadsController>()?.SelectedSquads;
+                if (sel != null)
+                    foreach (var g in sel)
+                    {
+                        var v = g?.VehicleHandler?.Vehicle;
+                        if (v != null && !string.IsNullOrEmpty(v.Id)) return v.Id;
+                    }
+            }
+            catch { }
+            return null;
+        }
+
+        private static Gameplay.Vehicles.Vehicle FindVehicle(string id)
+        {
+            var list = GameAccess.Game<Controllers.VehiclesController>()?.Vehicles;
+            if (list == null || string.IsNullOrEmpty(id)) return null;
+            foreach (var v in list)
+                if (v != null && v.Id == id) return v;
+            return null;
+        }
+
+        private static string VehicleLabel(Gameplay.Vehicles.VehicleType t)
+        {
+            foreach (var x in VehicleTypes) if (x.type == t) return x.label;
+            return t.ToString();
+        }
+
+        private static string ModLabel(Gameplay.Vehicles.ModificationType m)
+        {
+            foreach (var x in Mods) if (x.mod == m) return x.label;
+            return m.ToString();
+        }
+
+        /// <summary>null = passt; sonst der Grund, warum der Umbau nicht geht.</summary>
+        private static string ModBlocked(Gameplay.Vehicles.Vehicle v, Gameplay.Vehicles.ModificationType m)
+        {
+            if (v.ModificationHandler.HasModification(m)) return "schon eingebaut";
+            var cfg = HarmonyLib.Traverse.Create(v.ModificationHandler).Field("_carWorkshopConfig").GetValue<Gameplay.CarWorkshopConfig>();
+            var data = cfg?.GetModificationData(m);
+            if (cfg == null || data == null) return "gibt es nicht";
+            if (!data.IsAvailableFor(v.Data.GetVehicleType())) return "passt nicht zu diesem Fahrzeug";
+            var excl = cfg.MutuallyExclusiveModifications;
+            if (excl != null && excl.Contains(m))
+                foreach (var other in excl)
+                    if (other != m && v.ModificationHandler.HasModification(other)) return "geht nicht zusammen mit " + ModLabel(other);
+            return null;
+        }
+
+        private static string VehicleCmd(string[] a)
+        {
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            switch (a[0])
+            {
+                case "vmod":
+                {
+                    var v = FindVehicle(a[1]);
+                    if (v == null) return "Fahrzeug nicht gefunden";
+                    var m = (Gameplay.Vehicles.ModificationType)int.Parse(a[2], inv);
+                    string why = ModBlocked(v, m);
+                    if (why != null) return ModLabel(m) + ": " + why;
+                    v.ModificationHandler.AddModification(m);
+                    return ModLabel(m) + " eingebaut (" + VehicleLabel(v.Data.GetVehicleType()) + ")";
+                }
+                case "vfix":
+                {
+                    var v = FindVehicle(a[1]);
+                    if (v == null) return "Fahrzeug nicht gefunden";
+                    v.Health.SetHealthAmount01(1f);
+                    v.Fuel.FuelTank.SetQuantity(v.Fuel.FuelTank.MaxQuantity);
+                    return VehicleLabel(v.Data.GetVehicleType()) + " repariert und vollgetankt";
+                }
+                case "vspawn":
+                {
+                    var type = (Gameplay.Vehicles.VehicleType)int.Parse(a[1], inv);
+                    var pos = new Vector3(float.Parse(a[2], inv), float.Parse(a[3], inv), float.Parse(a[4], inv));
+                    var vc = GameAccess.Game<Controllers.VehiclesController>();
+                    var ids = GameAccess.Game<Serialization.Data.IdProvider>();
+                    var factory = vc != null ? VehicleFactory(vc) : null;
+                    if (vc == null || ids == null || factory == null) return "Fahrzeuge gerade nicht möglich";
+                    var v = factory.Create(ids.GetNextId(), type, pos, Quaternion.identity);
+                    vc.InitAbandonedVehicle(v);
+                    return VehicleLabel(type) + " erzeugt";
+                }
+            }
+            return "?";
+        }
 
         private static Gameplay.Buildings.Building FindBuilding(long id)
         {
@@ -591,14 +724,14 @@ namespace IfzCoop
             if (Searching && GUILayout.Button("×", GUILayout.Width(26f))) _search = "";
             GUILayout.EndHorizontal();
             if (!Searching)
-                _tab = GUILayout.Toolbar(_tab, Tabs);
+                _tab = GUILayout.SelectionGrid(_tab, Tabs, 4); // 7 Reiter: zwei Reihen
 
             _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.Height(440f));
             try
             {
                 if (Searching)
                 {
-                    DrawFlags(); DrawStock(); DrawBase(); DrawResearch(); DrawSquads(); DrawWorld();
+                    DrawFlags(); DrawStock(); DrawBase(); DrawResearch(); DrawSquads(); DrawVehicles(); DrawWorld();
                 }
                 else
                 {
@@ -609,7 +742,8 @@ namespace IfzCoop
                         case 2: DrawBase(); break;
                         case 3: DrawResearch(); break;
                         case 4: DrawSquads(); break;
-                        case 5: DrawWorld(); break;
+                        case 5: DrawVehicles(); break;
+                        case 6: DrawWorld(); break;
                     }
                 }
             }
@@ -801,6 +935,63 @@ namespace IfzCoop
             Section("Gegner", "Verstecke und Höhlen aufdecken", "Alle Infizierten-Horden töten");
             Btn("Verstecke und Höhlen aufdecken", "reveal");
             Btn("Alle Infizierten-Horden töten", "killhordes", danger: true);
+        }
+
+        // ================================================================ Fahrzeuge
+
+        private void DrawVehicles()
+        {
+            Section("Ausgewähltes Fahrzeug", "Reparieren und volltanken", "Umbauen", "Panzerung", "Turbo", "Schweres MG", "Panzerkanone", "Kofferraum", "Tank", "Rammschutz");
+            var v = FindVehicle(_selVehicle);
+            if (!Searching)
+                GUILayout.Label(v == null
+                    ? "Ausgewählt: keins (Fahrzeug anklicken, oder einen Trupp im Fahrzeug auswählen)"
+                    : "Ausgewählt: " + VehicleLabel(v.Data.GetVehicleType()) + "  (" + _selVehicle + ")");
+            if (v != null)
+            {
+                Btn("Reparieren und volltanken", "vfix " + v.Id);
+                if (!Searching) GUILayout.Label("Umbauen (wie in der Werkstatt, sofort und kostenlos):", _hint);
+                int col = 0;
+                GUILayout.BeginHorizontal();
+                foreach (var (mod, label) in Mods)
+                {
+                    string why = null;
+                    try { why = ModBlocked(v, mod); } catch { }
+                    if (!Match(label)) continue;
+                    if (col == 4) { GUILayout.EndHorizontal(); GUILayout.BeginHorizontal(); col = 0; }
+                    col++;
+                    bool ok = why == null;
+                    bool old = GUI.enabled;
+                    GUI.enabled = old && ok;
+                    if (GUILayout.Button(ok ? label : label + " (" + (why == "schon eingebaut" ? "drin" : "–") + ")"))
+                        Run("vmod " + v.Id + " " + (int)mod);
+                    GUI.enabled = old;
+                }
+                GUILayout.EndHorizontal();
+                if (!Searching) GUILayout.Label("Ausgegraut = schon eingebaut oder passt nicht zu diesem Fahrzeug. Ausbauen geht in der Werkstatt.", _hint);
+            }
+
+            Section("Fahrzeug erzeugen", "Fahrzeug erzeugen", "Panzer", "Bus", "Lastwagen", "Panzerwagen");
+            if (Searching && !VehicleTypes.Any(t => Match(t.label)) && !Match("Fahrzeug erzeugen")) return;
+            _spawnIdx = GUILayout.SelectionGrid(Mathf.Clamp(_spawnIdx, 0, VehicleTypes.Length - 1), VehicleTypes.Select(t => t.label).ToArray(), 5);
+            if (GUILayout.Button("„" + VehicleTypes[_spawnIdx].label + "“ erzeugen: dann auf die Karte klicken"))
+                StartSpawnCursor(VehicleTypes[_spawnIdx].type);
+            if (!Searching) GUILayout.Label("Jeder Linksklick auf die Karte setzt ein Fahrzeug, Rechtsklick beendet. Das Fahrzeug steht danach herrenlos da: mit einem Trupp einsteigen.", _hint);
+        }
+
+        private void StartSpawnCursor(Gameplay.Vehicles.VehicleType type)
+        {
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            try
+            {
+                GameInput.CursorsManager.SelectCursor(new GameInput.Debug.InstantiateObjectCursor(pos =>
+                    Run($"vspawn {(int)type} {pos.x.ToString("0.##", inv)} {pos.y.ToString("0.##", inv)} {pos.z.ToString("0.##", inv)}")));
+                _last = "Auf die Karte klicken (Rechtsklick = fertig)";
+            }
+            catch (Exception e)
+            {
+                _last = "Geht gerade nicht: " + e.Message;
+            }
         }
 
         // ================================================================ Welt & Zeit

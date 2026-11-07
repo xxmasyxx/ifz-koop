@@ -65,7 +65,11 @@ Fehler melden (F8)
 Entwickler-Menue (F7)
   - Fuer den Host und im Einzelspiel. Gaeste nur, wenn der Host unter "Mehrspieler"
     "Gaeste: Entwickler-Menue" auf "An" stellt (der Host fuehrt ihre Klicks aus).
-  - Reiter: Schalter | Lager & Waffen | Basis & Bewohner | Forschung | Trupps & Kampf | Welt & Zeit.
+  - Reiter: Schalter | Lager & Waffen | Basis & Bewohner | Forschung | Trupps & Kampf | Fahrzeuge | Welt & Zeit.
+  - Ausgewaehlt (erst im Spiel anklicken, dann F7): Trupps heilen / unsterblich, Gebaeude reparieren /
+    fertig bauen / pluendern / abreissen, Fahrzeug reparieren + volltanken und umbauen (Panzerung, Turbo,
+    Schweres MG, Panzerkanone, Kofferraum, Tank, Rammschutz - nur was zum Fahrzeug passt).
+  - Fahrzeug erzeugen: Typ waehlen, Knopf, dann auf die Karte klicken (Rechtsklick = fertig).
   - Schalter (bleiben an): Sofort bauen, Schnell bauen, Schnell forschen, Forschung kostenlos,
     Schnell pluendern, Unendlich Munition, Kein Hunger, Perfekte Stimmung, Perfektes Wetter.
   - Oben steht immer, was gerade an ist, dazu ein Suchfeld. Rote Knoepfe fragen nach.
