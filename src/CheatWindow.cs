@@ -265,6 +265,18 @@ namespace IfzCoop
                 case "vfix":
                 case "vspawn":
                     return VehicleCmd(a);
+                case "vdel":
+                {
+                    var v = FindVehicle(a[1]);
+                    if (v == null) return "Fahrzeug nicht gefunden";
+                    if (v.Owner != null) return "Erst mit dem Trupp aussteigen, dann löschen";
+                    string label = VehicleLabel(v.Data.GetVehicleType());
+                    Indestructible.Remove(v.Id);
+                    SpeedBoost.Remove(v.Id);
+                    v.DestroyVehicle();
+                    _selVehicleStatic = null;
+                    return label + " gelöscht";
+                }
                 case "vhard":
                 {
                     var v = FindVehicle(a[1]);
@@ -555,6 +567,7 @@ namespace IfzCoop
         private List<string> _selIds = new List<string>();
         private long _selBuilding;
         private string _selVehicle;
+        private static string _selVehicleStatic = "";
         private int _spawnIdx;
         private Controllers.InfoPanelController _infoPanel;
 
@@ -1497,7 +1510,7 @@ namespace IfzCoop
 
         private void DrawVehicles()
         {
-            Section("Ausgewähltes Fahrzeug", "Reparieren und volltanken", "Unzerstörbar", "Tempo", "Geschwindigkeit", "Umbauen", "Panzerung", "Turbo", "Schweres MG", "Panzerkanone", "Kofferraum", "Tank", "Rammschutz");
+            Section("Ausgewähltes Fahrzeug", "Reparieren und volltanken", "Fahrzeug löschen", "Unzerstörbar", "Tempo", "Geschwindigkeit", "Umbauen", "Panzerung", "Turbo", "Schweres MG", "Panzerkanone", "Kofferraum", "Tank", "Rammschutz");
             var v = FindVehicle(_selVehicle);
             if (!Searching)
                 GUILayout.Label(v == null
@@ -1518,6 +1531,8 @@ namespace IfzCoop
                     }
                 }
                 GUILayout.EndHorizontal();
+                if (v.Owner == null) Btn("Fahrzeug löschen", "vdel " + v.Id, danger: true);
+                else if (Match("Fahrzeug löschen") && !Searching) GUILayout.Label("Löschen geht erst, wenn kein Trupp drinsitzt.", _hint);
                 if (Match("Tempo") || Match("Geschwindigkeit"))
                 {
                     float curSpeed = SpeedBoost.TryGetValue(v.Id, out var sf) ? sf * 100f : 100f;

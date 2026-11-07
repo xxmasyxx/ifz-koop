@@ -12,7 +12,7 @@ namespace IfzCoop
     {
         public const string Guid = "de.ifzcoop";
         public const string Name = "IFZ Koop";
-        public const string Version = "0.23.14";
+        public const string Version = "0.23.15";
 
         internal static Plugin Instance;
         internal static ManualLogSource Log;
