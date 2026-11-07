@@ -305,6 +305,9 @@ namespace IfzCoop
                 case "instantmake":
                     InstantMake = a[1] == "1";
                     return InstantMake ? "Sofort herstellen AN" : "Sofort herstellen AUS";
+                case "instantcustomize":
+                    InstantCustomize = a[1] == "1";
+                    return InstantCustomize ? "Sofort anpassen AN" : "Sofort anpassen AUS";
                 case "instantdemolish":
                     InstantDemolish = a[1] == "1";
                     return InstantDemolish ? "Sofort abbauen AN" : "Sofort abbauen AUS";
@@ -495,6 +498,7 @@ namespace IfzCoop
             foreach (var f in FlagDefs) if (FlagOn(f.key)) on.Add(f.label);
             if (InstantMake) on.Add("Sofort herstellen");
             if (InstantDemolish) on.Add("Sofort abbauen");
+            if (InstantCustomize) on.Add("Sofort anpassen");
             if (OneHitAll) on.Add("Sofort töten (alle)");
             else if (OneHit.Count > 0) on.Add("Sofort töten (" + OneHit.Count + (OneHit.Count == 1 ? " Trupp)" : " Trupps)"));
             if (WalkBoost.Count > 0) on.Add(WalkBoost.Count + (WalkBoost.Count == 1 ? " Trupp" : " Trupps") + " mit anderem Lauftempo");
@@ -543,7 +547,7 @@ namespace IfzCoop
                 _nextWalkRebuild = now + 2f; // neue Mitglieder, Wechsel im Trupp
                 try { RebuildWalk(); } catch { }
             }
-            if ((!InstantBuild && !InstantMake && !InstantDemolish) || !Allowed || IsGuest)
+            if ((!InstantBuild && !InstantMake && !InstantDemolish && !InstantCustomize) || !Allowed || IsGuest)
                 return; // Sofort-Bauen/-Herstellen/-Abbauen rechnet nur der Host
             if (now < _nextInstant)
                 return;
@@ -553,6 +557,12 @@ namespace IfzCoop
                 int n = FinishAllConstruction();
                 if (n > 0)
                     Plugin.Log.LogInfo($"IFZCOOP Entwickler: {n} Baustellen sofort fertig");
+            }
+            if (InstantCustomize)
+            {
+                int c = CustomizeAllNow();
+                if (c > 0)
+                    Plugin.Log.LogInfo($"IFZCOOP Entwickler: {c} Anpassungen/Reparaturen sofort fertig");
             }
             if (InstantDemolish)
             {
@@ -883,6 +893,7 @@ namespace IfzCoop
             InstantBuild = false;
             InstantMake = false;
             InstantDemolish = false;
+            InstantCustomize = false;
             OneHitAll = false;
             if (Immortal.Count > 0) Immortal.Clear();
             if (Indestructible.Count > 0) Indestructible.Clear();
@@ -924,6 +935,36 @@ namespace IfzCoop
 
         /// <summary>„Sofort abbauen“: Abbau/Rückbau von Häusern und Anlagen, Fahrzeuge zerlegen in der Werkstatt.</summary>
         public static bool InstantDemolish;
+
+        /// <summary>„Sofort anpassen“: Gebäude anpassen (Farbe, Verstärkung, Name) und reparieren sofort fertig.</summary>
+        public static bool InstantCustomize;
+
+        private static int CustomizeAllNow()
+        {
+            int n = 0;
+            var bc = GameAccess.Game<BuildingsController>();
+            if (bc?.Buildings == null) return 0;
+            foreach (var b in bc.Buildings.ToList())
+            {
+                if (b == null) continue;
+                try
+                {
+                    var st = b.StateMachine?.CurrentState?.StateType;
+                    if (st == Gameplay.Rebuilding.StateMachine.StructureStateType.Customization)
+                    {
+                        if (Sync.ProductionSync.FinishCustomizationNow(b)) n++;
+                    }
+                    else if (st == Gameplay.Rebuilding.StateMachine.StructureStateType.Repairing)
+                    {
+                        b.Health?.SetHealthAmount01(1f);
+                        b.RepairWork?.DeleteWork(); // wie „Reparatur beenden“: das Spiel wechselt auf fertig
+                        n++;
+                    }
+                }
+                catch (Exception e) { Plugin.Log.LogDebug($"Sofort anpassen {b.ID}: {e.Message}"); }
+            }
+            return n;
+        }
 
         private static int DemolishAllNow()
         {
@@ -1255,7 +1296,7 @@ namespace IfzCoop
 
         private void DrawFlags()
         {
-            Section("Dauer-Schalter (bleiben an, bis du sie ausmachst)", FlagDefs.Select(f => f.label).Concat(new[] { "Sofort bauen", "Sofort herstellen", "Sofort töten", "Sofort abbauen" }).ToArray());
+            Section("Dauer-Schalter (bleiben an, bis du sie ausmachst)", FlagDefs.Select(f => f.label).Concat(new[] { "Sofort bauen", "Sofort herstellen", "Sofort töten", "Sofort abbauen", "Sofort anpassen" }).ToArray());
             if (Match("Sofort bauen"))
             {
                 bool now = GUILayout.Toggle(InstantBuild, " Sofort bauen  (jede Baustelle wird gleich fertig, nur in diesem Spiel)");
@@ -1267,6 +1308,12 @@ namespace IfzCoop
                 bool now = GUILayout.Toggle(OneHitAll, " Sofort töten  (jeder Treffer deiner Trupps tötet; nur in diesem Spiel)");
                 if (now != OneHitAll)
                     Run("onehitall " + (now ? "1" : "0"));
+            }
+            if (Match("Sofort anpassen"))
+            {
+                bool now = GUILayout.Toggle(InstantCustomize, " Sofort anpassen  (Gebäude anpassen: Farbe, Verstärkung, Name; und Reparaturen)");
+                if (now != InstantCustomize)
+                    Run("instantcustomize " + (now ? "1" : "0"));
             }
             if (Match("Sofort abbauen"))
             {

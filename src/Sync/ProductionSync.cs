@@ -714,6 +714,23 @@ namespace IfzCoop.Sync
             return "Aussehen geändert: " + LookLine(b);
         }
 
+        /// <summary>
+        /// Entwickler-Menü „Sofort anpassen“: laufende Anpassung (auch die vorgeschaltete Reparatur) sofort fertig.
+        /// Wie „custom done“: volles Leben, Auftrag anwenden, Arbeit beenden → das Spiel wechselt auf „fertig“.
+        /// </summary>
+        public static bool FinishCustomizationNow(Building b)
+        {
+            if (b == null || StateOf(b) != StructureStateType.Customization || CustF(b) == null) return false;
+            b.Health?.SetHealthAmount01(1f);
+            CustF(b).ApplyRequest();
+            var cw = b.CurrentWork;
+            if (cw is CustomizationWork || cw is RepairStructureWork)
+                cw.DeleteWork();
+            if (StateOf(b) == StructureStateType.Customization)
+                b.StateMachine.ChangeTo(StructureStateType.Completed);
+            return true;
+        }
+
         private static CustomizationRequest MakeCustomization(bool wall, Color wc, bool roof, Color rc, bool enf, int et, string name)
         {
             var q = new CustomizationRequest();
