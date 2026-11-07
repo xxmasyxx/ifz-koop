@@ -61,6 +61,19 @@ namespace IfzCoop.Versus
             return false;
         }
 
+        /// <summary>
+        /// HqController.IsHqPresentInGame meldet bei Vorlage-Städten immer „HQ da“ (das Spiel hat es dort schon beim Erzeugen
+        /// der Karte gebaut) → die HQ-Wahl startet nie. Im Versus ohne HQ: „kein HQ“, damit die freie Wahl kommt.
+        /// </summary>
+        private static void HqPresentPostfix(ref bool __result)
+        {
+            if (__result && FreeHqWanted && HqController.MainHeadquarter == null)
+            {
+                __result = false;
+                Plugin.Log.LogInfo("IFZVS Vorlage-Karte: HQ-Wahl wird gestartet");
+            }
+        }
+
         private static void LatLonHqPostfix(ref Gameplay.Buildings.Building __result)
         {
             if (__result != null && FreeHqWanted)
@@ -77,6 +90,7 @@ namespace IfzCoop.Versus
             // Vorlage-Karten: kein vorgegebenes HQ im Versus
             TryPatch(harmony, typeof(HqController), "ChooseHqForRecommendedPlaces", nameof(RecommendedHqPrefix), null);
             TryPatch(harmony, typeof(MapEssentials.Map), "GetLatLonHq", null, nameof(LatLonHqPostfix));
+            TryPatch(harmony, typeof(HqController), "IsHqPresentInGame", null, nameof(HqPresentPostfix));
             TryPatch(harmony, typeof(Gameplay.Buildings.Building), "UpdateProduction", null, nameof(HqStoragePostfix));
 
             // Tempo und Pause nur vom Host

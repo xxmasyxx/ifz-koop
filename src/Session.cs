@@ -599,7 +599,9 @@ namespace IfzCoop
             }
 
             // Lobby aus dem Hauptmenü: sobald der Host im Spiel ist (bei der HQ-Wahl übernimmt SendSnapshot das Warten).
-            if (_waitingForGame.Count > 0 && GameAccess.IsGameStarted)
+            // Versus, neues Spiel ohne HQ (z. B. Vorlage-Stadt: Intro läuft noch, HQ-Wahl kommt gleich): warten statt Koop
+            bool vsWaitForHqChoice = Menu.LobbySettings.Mode == "versus" && Controllers.HqController.MainHeadquarter == null;
+            if (_waitingForGame.Count > 0 && GameAccess.IsGameStarted && !vsWaitForHqChoice)
             {
                 if (Menu.LobbySettings.Mode == "versus" && !Hq.HostChoosingHq)
                 {

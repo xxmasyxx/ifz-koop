@@ -906,7 +906,7 @@ namespace IfzCoop
 
                 case "newgame":
                     // Neues Spiel aus dem Hauptmenü: "newgame <x> <y>"
-                    Commands.MenuConsoleCommandsHandler.LoadTileWithConfiguration(int.Parse(a[1], CultureInfo.InvariantCulture), int.Parse(a[2], CultureInfo.InvariantCulture), 15, 1, 9, Vector2Int.zero, fromSuggestedCitiesList: false);
+                    Commands.MenuConsoleCommandsHandler.LoadTileWithConfiguration(int.Parse(a[1], CultureInfo.InvariantCulture), int.Parse(a[2], CultureInfo.InvariantCulture), 15, 1, 9, Vector2Int.zero, fromSuggestedCitiesList: a.Length > 3 && a[3] == "s");
                     return "lade Kachel " + a[1] + "," + a[2];
 
                 case "loadsave":
