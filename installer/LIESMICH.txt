@@ -9,11 +9,16 @@ Installieren
   3. Der Installer findet das Spiel ueber Steam selbst, laedt BepInEx (Mod-Lader)
      und legt den Mod ins Spiel.
 
-Launcher (ab 0.23.3)
-  - Der Installer legt auf dem Desktop die Verknuepfung "IFZ Koop" an.
-  - Doppelklick darauf: holt die neueste Version von GitHub, installiert sie, startet das Spiel.
-  - Die Datei IfzCoop-Launcher.bat geht auch allein (ohne den Rest), z. B. fuer einen neuen Mitspieler:
-    https://github.com/xxmasyxx/ifz-koop/releases/latest/download/IfzCoop-Launcher.bat
+Launcher (ab 0.23.4)
+  - Der Installer legt auf dem Desktop die Verknuepfung "IFZ Koop" an (IfzCoop-Launcher.exe).
+  - "Neueste Version holen und spielen": holt die neueste Version von GitHub und startet das Spiel.
+  - "Spielen ohne Update": startet mit der installierten Version.
+  - "Andere Version waehlen": Liste aller Versionen mit ihren Aenderungen, "Installieren".
+    Bei einer aelteren Version wird das Auto-Update ausgeschaltet (Haken unten).
+  - Die exe geht auch allein (installiert dann BepInEx und den Mod selbst):
+    https://github.com/xxmasyxx/ifz-koop/releases/latest/download/IfzCoop-Launcher.exe
+    Windows warnt beim ersten Start eventuell ("Der Computer wurde durch Windows geschuetzt"):
+    "Weitere Informationen" und dann "Trotzdem ausfuehren".
 
 Updates (ab 0.23.1)
   - Kommen von selbst: Beim Spielstart holt der Mod die neueste Version von

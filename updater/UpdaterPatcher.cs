@@ -57,6 +57,14 @@ namespace IfzCoop.Updater
                 _log.LogInfo("Automatische Updates sind aus (ifzcoop-update.cfg).");
                 return;
             }
+            // Launcher „Spielen ohne Update“: einmalige Sperrdatei
+            string skipOnce = Path.Combine(CacheDir, "ifzcoop-skipupdate-once");
+            if (File.Exists(skipOnce))
+            {
+                try { File.Delete(skipOnce); } catch { }
+                _log.LogInfo("Update diesmal übersprungen (Launcher: Spielen ohne Update).");
+                return;
+            }
             foreach (var a in Environment.GetCommandLineArgs())
                 if (string.Equals(a, "-ifzcoop-noupdate", StringComparison.OrdinalIgnoreCase))
                 {

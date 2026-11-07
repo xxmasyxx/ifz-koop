@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    IFZ Koop Launcher: kleines Windows-Programm (.NET Framework 4.8, ist auf Windows 10/11 schon da).
+    Neueste Version holen und spielen, ohne Update spielen, oder eine bestimmte Version von GitHub installieren.
+  -->
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>IfzCoop-Launcher</AssemblyName>
+    <RootNamespace>IfzCoop.Launcher</RootNamespace>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <Version>1.0.0</Version>
+    <Product>IFZ Koop Launcher</Product>
+    <Company>IFZ Koop</Company>
+    <Description>Startet Infection Free Zone mit dem Koop-Mod IFZ Koop</Description>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Web.Extensions" />
+  </ItemGroup>
+
+</Project>

@@ -248,7 +248,7 @@ function Get-NewestFiles {
         $remote = [version]$kv['version']
         if ($remote -le $have) { Ok "Mitgelieferte Version $have ist die neueste"; return $Here }
         Say "Auf GitHub gibt es die neuere Version $remote, lade ..."
-        foreach ($name in @('IfzCoop.dll', 'IfzCoop.Updater.dll', 'IfzCoop-Launcher.bat')) {
+        foreach ($name in @('IfzCoop.dll', 'IfzCoop.Updater.dll', 'IfzCoop-Launcher.exe')) {
             if (-not $kv[$name]) { continue }
             $out = Join-Path $tmp $name
             Invoke-WebRequest -Uri ($base + $name) -OutFile $out -UseBasicParsing -TimeoutSec 60
@@ -323,10 +323,12 @@ function Install-All([string]$gameDir) {
             Ok 'Auto-Update installiert (holt beim Spielstart die neueste Version von GitHub)'
         }
 
-        $launcher = Join-Path $src 'IfzCoop-Launcher.bat'
-        if (-not (Test-Path -LiteralPath $launcher)) { $launcher = Join-Path $Here 'IfzCoop-Launcher.bat' }
+        $launcher = Join-Path $src 'IfzCoop-Launcher.exe'
+        if (-not (Test-Path -LiteralPath $launcher)) { $launcher = Join-Path $Here 'IfzCoop-Launcher.exe' }
+        $oldBat = Join-Path $gameDir 'BepInEx\IfzCoop-Launcher.bat'
+        if (Test-Path -LiteralPath $oldBat) { Remove-Item -LiteralPath $oldBat -Force -ErrorAction SilentlyContinue }
         if (Test-Path -LiteralPath $launcher) {
-            $launcherTarget = Join-Path $gameDir 'BepInEx\IfzCoop-Launcher.bat'
+            $launcherTarget = Join-Path $gameDir 'BepInEx\IfzCoop-Launcher.exe'
             if (-not [string]::Equals([IO.Path]::GetFullPath($launcher), [IO.Path]::GetFullPath($launcherTarget), [StringComparison]::OrdinalIgnoreCase)) {
                 Copy-Item -LiteralPath $launcher -Destination $launcherTarget -Force
             }
@@ -367,7 +369,7 @@ function Uninstall-All([string]$gameDir) {
     if (Test-Path -LiteralPath $updDir) { Remove-Item -LiteralPath $updDir -Recurse -Force; Ok 'Auto-Update entfernt' }
     $updCfg = Join-Path $gameDir 'BepInEx\config\ifzcoop-update.cfg'
     if (Test-Path -LiteralPath $updCfg) { Remove-Item -LiteralPath $updCfg -Force }
-    foreach ($p in @((Join-Path $gameDir 'BepInEx\IfzCoop-Launcher.bat'), (Join-Path ([Environment]::GetFolderPath('Desktop')) 'IFZ Koop.lnk'))) {
+    foreach ($p in @((Join-Path $gameDir 'BepInEx\IfzCoop-Launcher.bat'), (Join-Path $gameDir 'BepInEx\IfzCoop-Launcher.exe'), (Join-Path ([Environment]::GetFolderPath('Desktop')) 'IFZ Koop.lnk'))) {
         if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force }
     }
 
