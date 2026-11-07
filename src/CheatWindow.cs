@@ -756,6 +756,7 @@ namespace IfzCoop
             GUILayout.Label(_last);
             if (GUILayout.Button($"Schließen ({Plugin.CheatKey.Value})"))
                 Visible = false;
+            DrawTooltip();
             GUI.DragWindow();
         }
 
@@ -800,10 +801,100 @@ namespace IfzCoop
             {
                 GUILayout.BeginHorizontal();
                 for (int j = i; j < i + 4 && j < shown.Length; j++)
-                    if (GUILayout.Button($"{shown[j].label} +{Amount}", GUILayout.Width(140f)))
+                    if (IconButton(ResIcon(shown[j].id), shown[j].label + "\n+" + Amount, $"{shown[j].label}: {Amount} ins Lager legen", 140f))
                         Run($"give {shown[j].id} {Amount}");
                 GUILayout.EndHorizontal();
             }
+        }
+
+        // ================================================================ Bilder aus dem Spiel
+
+        private readonly Dictionary<ResourceID, Sprite> _resIcons = new Dictionary<ResourceID, Sprite>();
+        private readonly Dictionary<Gameplay.Vehicles.ModificationType, Sprite> _modIcons = new Dictionary<Gameplay.Vehicles.ModificationType, Sprite>();
+        private GUIStyle _iconText, _tip;
+
+        private Sprite ResIcon(ResourceID id)
+        {
+            if (_resIcons.TryGetValue(id, out var s)) return s;
+            try { s = Data.Resorces.ResourcesDataContainer.Instance?.GetResourceDataByType(id)?.SpriteUI; }
+            catch { s = null; }
+            _resIcons[id] = s;
+            return s;
+        }
+
+        private Sprite ModIcon(Gameplay.Vehicles.Vehicle v, Gameplay.Vehicles.ModificationType m)
+        {
+            if (_modIcons.TryGetValue(m, out var s) && s != null) return s;
+            try
+            {
+                var cfg = HarmonyLib.Traverse.Create(v.ModificationHandler).Field("_carWorkshopConfig").GetValue<Gameplay.CarWorkshopConfig>();
+                s = cfg?.GetModificationData(m)?.ModificationSprite;
+            }
+            catch { s = null; }
+            _modIcons[m] = s;
+            return s;
+        }
+
+        /// <summary>Sprite in IMGUI zeichnen (auch aus einem Atlas), Seitenverhältnis bleibt.</summary>
+        private static void DrawSprite(Rect r, Sprite s)
+        {
+            if (s == null || s.texture == null) return;
+            var uvs = s.uv;
+            if (uvs == null || uvs.Length == 0) return;
+            float x0 = 1f, y0 = 1f, x1 = 0f, y1 = 0f;
+            foreach (var u in uvs) { x0 = Mathf.Min(x0, u.x); y0 = Mathf.Min(y0, u.y); x1 = Mathf.Max(x1, u.x); y1 = Mathf.Max(y1, u.y); }
+            var uv = new Rect(x0, y0, x1 - x0, y1 - y0);
+            float aspect = s.rect.height > 0f ? s.rect.width / s.rect.height : 1f;
+            float w = r.width, h = r.height;
+            if (aspect > 1f) h = w / aspect; else w = h * aspect;
+            GUI.DrawTextureWithTexCoords(new Rect(r.x + (r.width - w) / 2f, r.y + (r.height - h) / 2f, w, h), s.texture, uv, true);
+        }
+
+        /// <summary>Knopf mit Spielbild links und Text rechts; der Hinweis erscheint beim Drüberfahren.</summary>
+        private bool IconButton(Sprite icon, string text, string tooltip, float width, bool enabled = true)
+        {
+            if (_iconText == null)
+            {
+                _iconText = new GUIStyle(GUI.skin.label) { fontSize = 12, alignment = TextAnchor.MiddleLeft, wordWrap = true };
+            }
+            var r = GUILayoutUtility.GetRect(width, 46f, GUILayout.Width(width), GUILayout.Height(46f));
+            bool old = GUI.enabled;
+            GUI.enabled = old && enabled;
+            bool clicked = GUI.Button(r, new GUIContent("", tooltip));
+            float textX = r.x + 6f;
+            if (icon != null)
+            {
+                var c = GUI.color;
+                if (!GUI.enabled) GUI.color = new Color(1f, 1f, 1f, 0.35f);
+                DrawSprite(new Rect(r.x + 4f, r.y + 4f, 38f, 38f), icon);
+                GUI.color = c;
+                textX = r.x + 46f;
+            }
+            GUI.Label(new Rect(textX, r.y + 2f, r.xMax - textX - 4f, r.height - 4f), text, _iconText);
+            GUI.enabled = old;
+            return clicked;
+        }
+
+        /// <summary>Hinweis-Kästchen an der Maus (GUI.tooltip vom Knopf darunter).</summary>
+        private void DrawTooltip()
+        {
+            string tip = GUI.tooltip;
+            if (string.IsNullOrEmpty(tip) || Event.current.type != EventType.Repaint) return;
+            if (_tip == null)
+            {
+                _tip = new GUIStyle(GUI.skin.box) { fontSize = 13, wordWrap = true, alignment = TextAnchor.MiddleLeft, padding = new RectOffset(8, 8, 5, 5) };
+                _tip.normal.textColor = Color.white;
+            }
+            var content = new GUIContent(tip);
+            float w = Mathf.Min(320f, _tip.CalcSize(content).x + 4f);
+            float h = _tip.CalcHeight(content, w);
+            var m = Event.current.mousePosition;
+            float x = Mathf.Min(m.x + 16f, _rect.width - w - 4f);
+            var bg = GUI.backgroundColor;
+            GUI.backgroundColor = new Color(0f, 0f, 0f, 1f);
+            GUI.Box(new Rect(x, m.y + 20f, w, h), content, _tip);
+            GUI.Box(new Rect(x, m.y + 20f, w, h), content, _tip); // zweimal = deckender
+            GUI.backgroundColor = bg;
         }
 
         private void DrawStock()
@@ -961,11 +1052,10 @@ namespace IfzCoop
                     if (col == 4) { GUILayout.EndHorizontal(); GUILayout.BeginHorizontal(); col = 0; }
                     col++;
                     bool ok = why == null;
-                    bool old = GUI.enabled;
-                    GUI.enabled = old && ok;
-                    if (GUILayout.Button(ok ? label : label + " (" + (why == "schon eingebaut" ? "drin" : "–") + ")"))
+                    string text = ok ? label : label + "\n(" + (why == "schon eingebaut" ? "drin" : "passt nicht") + ")";
+                    string tip = ok ? label + " einbauen (sofort, kostenlos)" : label + ": " + why;
+                    if (IconButton(ModIcon(v, mod), text, tip, 140f, ok))
                         Run("vmod " + v.Id + " " + (int)mod);
-                    GUI.enabled = old;
                 }
                 GUILayout.EndHorizontal();
                 if (!Searching) GUILayout.Label("Ausgegraut = schon eingebaut oder passt nicht zu diesem Fahrzeug. Ausbauen geht in der Werkstatt.", _hint);
