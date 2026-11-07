@@ -9,6 +9,12 @@ Installieren
   3. Der Installer findet das Spiel ueber Steam selbst, laedt BepInEx (Mod-Lader)
      und legt den Mod ins Spiel.
 
+Launcher (ab 0.23.3)
+  - Der Installer legt auf dem Desktop die Verknuepfung "IFZ Koop" an.
+  - Doppelklick darauf: holt die neueste Version von GitHub, installiert sie, startet das Spiel.
+  - Die Datei IfzCoop-Launcher.bat geht auch allein (ohne den Rest), z. B. fuer einen neuen Mitspieler:
+    https://github.com/xxmasyxx/ifz-koop/releases/latest/download/IfzCoop-Launcher.bat
+
 Updates (ab 0.23.1)
   - Kommen von selbst: Beim Spielstart holt der Mod die neueste Version von
     https://github.com/xxmasyxx/ifz-koop (Pruefsumme wird geprueft). Ohne Internet

@@ -13,6 +13,10 @@ BepInEx-5-Mod (C#) für Spielversion 0.26.10.21.
    lädt BepInEx 5.4.23.5 (Prüfsumme wird geprüft) und legt den Mod ins Spiel.
 3. Spiel ganz normal über Steam starten.
 
+**Noch einfacher:** nur den **[Launcher](https://github.com/xxmasyxx/ifz-koop/releases/latest/download/IfzCoop-Launcher.bat)**
+herunterladen und doppelklicken. Er holt die neueste Version, installiert sie und startet das Spiel. Der Installer legt
+dafür auch eine Desktop-Verknüpfung „IFZ Koop“ an.
+
 **Updates kommen von selbst:** Beim Spielstart schaut der Mod hier auf GitHub nach einer neueren Version und installiert
 sie, bevor das Spiel lädt (Prüfsumme wird geprüft). Ohne Internet startet das Spiel mit der installierten Version.
 Abschalten: in `<Spiel>\BepInEx\config\ifzcoop-update.cfg` die Zeile `AutoUpdate = false`, oder Startoption `-ifzcoop-noupdate`.

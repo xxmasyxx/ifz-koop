@@ -346,6 +346,8 @@ namespace IfzCoop
             // Statistik je Spieler (StatsSync): Trupp-Ausbildung, Treffer/Tod mit Angreifer
             TryPatch(harmony, typeof(SquadCreatorController), "AddCreationRequestAtStructure", nameof(StatsSquadPrefix));
             TryPatch(harmony, typeof(Character), "ReceiveDamage", nameof(StatsDamagePrefix), nameof(StatsDamagePostfix));
+            // Entwickler-Menü: unsterbliche Trupps (CheatWindow.Immortal) bekommen keinen Lebenspunkt abgezogen
+            TryPatch(harmony, typeof(Character), "SubtractHp", nameof(ImmortalPrefix));
             TryPatch(harmony, typeof(SquadsCreator), "ReplenishGroup", nameof(LocalSquadCreationPrefix));
             // Prefix, nicht Postfix: danach ist die Figur schon aus ihrem Trupp und gilt weder als Soldat noch Arbeiter.
             TryPatch(harmony, typeof(Character), "DestroyCharacter", nameof(DestroyCharacterPrefix));
@@ -440,6 +442,14 @@ namespace IfzCoop
             var s = CurrentSession;
             if (s != null && s.Role != Role.Guest && !UnitSync.NetApplying)
                 s.Stats?.AddForActor(Sync.StatsSync.Stat.Squads);
+        }
+
+        // Character.SubtractHp(float amount, SubtractionHpReason deathReason, Weapon weapon)
+        private static bool ImmortalPrefix(Character __instance)
+        {
+            if (CheatWindow.Immortal.Count == 0 || __instance == null) return true;
+            var g = __instance.Group;
+            return g == null || string.IsNullOrEmpty(g.Id) || !CheatWindow.Immortal.Contains(g.Id);
         }
 
         // Character.ReceiveDamage(Weapon attackedWith, float dmg, SubtractionHpReason reason, IDamageApplier damageApplier)

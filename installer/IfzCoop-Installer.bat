@@ -248,7 +248,7 @@ function Get-NewestFiles {
         $remote = [version]$kv['version']
         if ($remote -le $have) { Ok "Mitgelieferte Version $have ist die neueste"; return $Here }
         Say "Auf GitHub gibt es die neuere Version $remote, lade ..."
-        foreach ($name in @('IfzCoop.dll', 'IfzCoop.Updater.dll')) {
+        foreach ($name in @('IfzCoop.dll', 'IfzCoop.Updater.dll', 'IfzCoop-Launcher.bat')) {
             if (-not $kv[$name]) { continue }
             $out = Join-Path $tmp $name
             Invoke-WebRequest -Uri ($base + $name) -OutFile $out -UseBasicParsing -TimeoutSec 60
@@ -322,6 +322,26 @@ function Install-All([string]$gameDir) {
             Copy-Item -LiteralPath $updater -Destination (Join-Path $updDir 'IfzCoop.Updater.dll') -Force
             Ok 'Auto-Update installiert (holt beim Spielstart die neueste Version von GitHub)'
         }
+
+        $launcher = Join-Path $src 'IfzCoop-Launcher.bat'
+        if (-not (Test-Path -LiteralPath $launcher)) { $launcher = Join-Path $Here 'IfzCoop-Launcher.bat' }
+        if (Test-Path -LiteralPath $launcher) {
+            $launcherTarget = Join-Path $gameDir 'BepInEx\IfzCoop-Launcher.bat'
+            if (-not [string]::Equals([IO.Path]::GetFullPath($launcher), [IO.Path]::GetFullPath($launcherTarget), [StringComparison]::OrdinalIgnoreCase)) {
+                Copy-Item -LiteralPath $launcher -Destination $launcherTarget -Force
+            }
+            try {
+                $lnk = Join-Path ([Environment]::GetFolderPath('Desktop')) 'IFZ Koop.lnk'
+                $sh = New-Object -ComObject WScript.Shell
+                $s = $sh.CreateShortcut($lnk)
+                $s.TargetPath = $launcherTarget
+                $s.WorkingDirectory = Split-Path $launcherTarget
+                $s.IconLocation = (Join-Path $gameDir 'Infection Free Zone.exe') + ',0'
+                $s.Description = 'IFZ Koop: aktualisieren und Infection Free Zone starten'
+                $s.Save()
+                Ok 'Desktop-Verknuepfung "IFZ Koop" angelegt (aktualisiert und startet das Spiel)'
+            } catch { Warn "Desktop-Verknuepfung nicht angelegt: $($_.Exception.Message)" }
+        }
     } catch [UnauthorizedAccessException] {
         Fail 'Keine Schreibrechte im Spielordner.' 'Den Installer mit Rechtsklick > "Als Administrator ausfuehren" starten.'
     }
@@ -347,6 +367,9 @@ function Uninstall-All([string]$gameDir) {
     if (Test-Path -LiteralPath $updDir) { Remove-Item -LiteralPath $updDir -Recurse -Force; Ok 'Auto-Update entfernt' }
     $updCfg = Join-Path $gameDir 'BepInEx\config\ifzcoop-update.cfg'
     if (Test-Path -LiteralPath $updCfg) { Remove-Item -LiteralPath $updCfg -Force }
+    foreach ($p in @((Join-Path $gameDir 'BepInEx\IfzCoop-Launcher.bat'), (Join-Path ([Environment]::GetFolderPath('Desktop')) 'IFZ Koop.lnk'))) {
+        if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force }
+    }
 
     if ($state.OurBepInEx) {
         $others = @(Get-ChildItem -LiteralPath (Join-Path $gameDir 'BepInEx\plugins') -ErrorAction SilentlyContinue)

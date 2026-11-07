@@ -115,6 +115,12 @@ namespace IfzCoop.Sync
             }
         }
 
+        /// <summary>Für das Entwickler-Menü: das gerade angeklickte Gebäude (0 = keins).</summary>
+        public long CurrentBuildingId()
+        {
+            try { return SelectedBuildingId(); } catch { return 0; }
+        }
+
         /// <summary>Das Gebäude, dessen Infofenster offen ist oder das umrandet ist.</summary>
         private long SelectedBuildingId()
         {

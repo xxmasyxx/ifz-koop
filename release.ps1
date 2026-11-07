@@ -27,7 +27,7 @@ $out = Join-Path $root "dist\release-$ver"
 if (Test-Path $out) { Remove-Item $out -Recurse -Force }
 New-Item -ItemType Directory -Path $out | Out-Null
 
-$files = 'IfzCoop.dll', 'IfzCoop.Updater.dll'
+$files = 'IfzCoop.dll', 'IfzCoop.Updater.dll', 'IfzCoop-Launcher.bat'
 $lines = @("version=$ver")
 foreach ($f in $files) {
     Copy-Item (Join-Path $pkg $f) $out
@@ -40,7 +40,8 @@ $zip = Join-Path $out 'IfzCoop.zip'
 Compress-Archive -Path (Join-Path $pkg '*') -DestinationPath $zip -Force
 Copy-Item $zip (Join-Path $root "dist\IfzCoop-$ver.zip") -Force
 
-$assets = @('version.txt', 'IfzCoop.dll', 'IfzCoop.Updater.dll', 'IfzCoop.zip') | ForEach-Object { Join-Path $out $_ }
+Copy-Item (Join-Path $pkg 'IfzCoop-Installer.bat') $out
+$assets = @('version.txt', 'IfzCoop.dll', 'IfzCoop.Updater.dll', 'IfzCoop-Launcher.bat', 'IfzCoop-Installer.bat', 'IfzCoop.zip') | ForEach-Object { Join-Path $out $_ }
 # Text ueber Datei (PowerShell 5.1 zerlegt Anfuehrungszeichen in Argumenten an Programme)
 $notesFile = Join-Path $out 'notes.md'
 [IO.File]::WriteAllText($notesFile, $(if ($Notes) { $Notes } else { "IFZ Koop $ver" }), (New-Object Text.UTF8Encoding $false))

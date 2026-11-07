@@ -18,7 +18,7 @@
     <RootNamespace>IfzCoop</RootNamespace>
     <LangVersion>9.0</LangVersion>
     <Nullable>disable</Nullable>
-    <Version>0.23.2</Version>
+    <Version>0.23.3</Version>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
@@ -138,7 +138,7 @@
     <MakeDir Directories="$(PackageDir)" />
     <!-- Updater (Preloader-Patcher, eigenes Projekt) mitbauen -->
     <Exec Command="dotnet build &quot;$(MSBuildProjectDirectory)\updater\IfzCoop.Updater.csproj&quot; -c $(Configuration) -nologo -v:q &quot;-p:BepInExCoreDir=$(BepInExCoreDir)&quot;" />
-    <Copy SourceFiles="$(TargetPath);$(MSBuildProjectDirectory)\updater\bin\$(Configuration)\IfzCoop.Updater.dll;$(MSBuildProjectDirectory)\installer\IfzCoop-Installer.bat;$(MSBuildProjectDirectory)\installer\LIESMICH.txt" DestinationFolder="$(PackageDir)" />
+    <Copy SourceFiles="$(TargetPath);$(MSBuildProjectDirectory)\updater\bin\$(Configuration)\IfzCoop.Updater.dll;$(MSBuildProjectDirectory)\installer\IfzCoop-Installer.bat;$(MSBuildProjectDirectory)\installer\IfzCoop-Launcher.bat;$(MSBuildProjectDirectory)\installer\LIESMICH.txt" DestinationFolder="$(PackageDir)" />
     <Message Importance="high" Text="Paket: $(PackageDir)" />
   </Target>
 

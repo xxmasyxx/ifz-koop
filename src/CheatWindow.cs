@@ -231,6 +231,32 @@ namespace IfzCoop
                                 if (c != null && !c.IsDead()) { c.Health.SetHealthAmount01(1f); k++; }
                     return k + " Figuren geheilt";
                 }
+                case "bld":
+                    return BuildingCmd(a[1], long.Parse(a[2], inv));
+                case "healsel":
+                {
+                    var groups = SquadsById(a[1].Split(',')).ToList();
+                    if (groups.Count == 0) return "Trupp nicht gefunden";
+                    return HealGroups(groups) + " Figuren geheilt (" + string.Join(", ", groups.Select(g => SquadName(g.Id))) + ")";
+                }
+                case "immortal":
+                {
+                    bool on = a[1] == "1";
+                    if (!on && a[2] == "all")
+                    {
+                        int n = Immortal.Count;
+                        Immortal.Clear();
+                        return n + " Trupps wieder sterblich";
+                    }
+                    var groups = SquadsById(a[2].Split(',')).ToList();
+                    if (groups.Count == 0) return "Trupp nicht gefunden";
+                    foreach (var g in groups)
+                    {
+                        if (on) Immortal.Add(g.Id); else Immortal.Remove(g.Id);
+                    }
+                    if (on) HealGroups(groups);
+                    return string.Join(", ", groups.Select(g => SquadName(g.Id))) + (on ? " unsterblich" : " wieder sterblich");
+                }
                 case "ammo":
                 {
                     int k = 0;
@@ -335,6 +361,7 @@ namespace IfzCoop
             var on = new List<string>();
             if (InstantBuild) on.Add("Sofort bauen");
             foreach (var f in FlagDefs) if (FlagOn(f.key)) on.Add(f.label);
+            if (Immortal.Count > 0) on.Add(Immortal.Count + (Immortal.Count == 1 ? " Trupp" : " Trupps") + " unsterblich");
             return on.Count == 0 ? "keine Schalter an" : string.Join(", ", on);
         }
 
@@ -394,7 +421,114 @@ namespace IfzCoop
                 else GUI.Box(new Rect((Screen.width - 420f) / 2f, 110f, 420f, 30f), "Entwickler-Menü: erst ein Spiel starten oder laden.");
                 return;
             }
+            // Auswahl merken, solange die Maus nicht über dem Fenster ist: ein Klick ins Fenster kann im Spiel die
+            // Trupp-Auswahl aufheben, die Knöpfe sollen trotzdem für die vorher gewählten Trupps gelten.
+            if (Event.current.type == EventType.Layout)
+            {
+                var mouse = new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
+                if (!_rect.Contains(mouse))
+                {
+                    _selIds = CurrentSelection();
+                    _selBuilding = _session.Presence?.CurrentBuildingId() ?? 0;
+                }
+            }
             _rect = GUILayout.Window(WindowId, _rect, DrawContents, IsGuest ? "Entwickler-Menü (Gast, der Host führt aus)" : "Entwickler-Menü");
+        }
+
+        // ================================================================ ausgewählte Trupps
+
+        /// <summary>Unsterbliche Trupps (Group.Id). Wirkt beim Host/Einzelspiel: UnitPatches.ImmortalPrefix auf Character.SubtractHp.</summary>
+        public static readonly HashSet<string> Immortal = new HashSet<string>();
+
+        private List<string> _selIds = new List<string>();
+        private long _selBuilding;
+
+        private static Gameplay.Buildings.Building FindBuilding(long id)
+        {
+            var bc = GameAccess.Game<BuildingsController>();
+            if (bc?.Buildings == null || id == 0) return null;
+            foreach (var b in bc.Buildings)
+                if (b != null && b.ID == id) return b;
+            return null;
+        }
+
+        private static string BuildingLabel(long id)
+        {
+            var b = FindBuilding(id);
+            if (b == null) return "Haus " + id;
+            string st = b.StateMachine?.CurrentState?.StateType.ToString() ?? "?";
+            float hp = 0f;
+            try { hp = b.Health.GetHealthAmount01() * 100f; } catch { }
+            return $"Haus {id} ({st}, {hp:0} % Leben)";
+        }
+
+        /// <summary>Befehle für ein einzelnes Gebäude: repair, finish, scavenge, demolish.</summary>
+        private static string BuildingCmd(string what, long id)
+        {
+            var b = FindBuilding(id);
+            if (b == null) return "Gebäude nicht gefunden";
+            var st = b.StateMachine?.CurrentState?.StateType;
+            switch (what)
+            {
+                case "repair":
+                    b.Health.SetHealthAmount01(1f);
+                    return $"Haus {id} repariert (volles Leben)";
+                case "finish":
+                    if (st == Gameplay.Rebuilding.StateMachine.StructureStateType.Constructing)
+                    {
+                        b.StateMachine.ChangeTo(Gameplay.Rebuilding.StateMachine.StructureStateType.Completed);
+                        return $"Haus {id} fertig gebaut";
+                    }
+                    return $"Haus {id} wird gerade nicht gebaut ({st})";
+                case "scavenge":
+                    if (st != Gameplay.Rebuilding.StateMachine.StructureStateType.Abandoned) return $"Haus {id} ist nicht verlassen ({st})";
+                    if (b.IsScavenged()) return $"Haus {id} ist schon geplündert";
+                    b.InitializeAndEndScavengeWork();
+                    return $"Haus {id} geplündert";
+                case "demolish":
+                    b.StartDemolish();
+                    return $"Haus {id} wird abgerissen";
+            }
+            return "?";
+        }
+
+        private static List<string> CurrentSelection()
+        {
+            var ids = new List<string>();
+            try
+            {
+                var sel = GameAccess.Game<SquadsController>()?.SelectedSquads;
+                if (sel != null)
+                    foreach (var g in sel)
+                        if (g != null && !string.IsNullOrEmpty(g.Id) && !ids.Contains(g.Id)) ids.Add(g.Id);
+            }
+            catch { }
+            return ids;
+        }
+
+        private static IEnumerable<Group> SquadsById(IEnumerable<string> ids)
+        {
+            var set = new HashSet<string>(ids);
+            var squads = GameAccess.Game<SquadsController>()?.Squads;
+            if (squads == null) yield break;
+            foreach (var g in squads)
+                if (g != null && set.Contains(g.Id)) yield return g;
+        }
+
+        private static string SquadName(string id)
+        {
+            foreach (var g in SquadsById(new[] { id }))
+                return string.IsNullOrEmpty(g.GroupName) ? id : g.GroupName;
+            return id;
+        }
+
+        private static int HealGroups(IEnumerable<Group> groups)
+        {
+            int k = 0;
+            foreach (var g in groups)
+                foreach (var c in g.Characters)
+                    if (c != null && !c.IsDead()) { c.Health.SetHealthAmount01(1f); k++; }
+            return k;
         }
 
         private GUIStyle _danger, _onStyle, _hint, _sectionStyle;
@@ -591,6 +725,20 @@ namespace IfzCoop
             Btn("Jetzt alle Baustellen fertig", "finish");
             Btn("Alle Häuser plündern (Funde bleiben im Haus)", "scavengeall", danger: true);
 
+            Section("Ausgewähltes Gebäude", "Gebäude reparieren", "Gebäude fertig bauen", "Gebäude plündern", "Gebäude abreißen");
+            if (!Searching)
+                GUILayout.Label(_selBuilding == 0 ? "Ausgewählt: keins (Gebäude im Spiel anklicken)" : "Ausgewählt: " + BuildingLabel(_selBuilding));
+            if (_selBuilding != 0)
+            {
+                string id = _selBuilding.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                GUILayout.BeginHorizontal();
+                Btn("Gebäude reparieren", "bld repair " + id);
+                Btn("Gebäude fertig bauen", "bld finish " + id);
+                Btn("Gebäude plündern", "bld scavenge " + id);
+                GUILayout.EndHorizontal();
+                Btn("Gebäude abreißen", "bld demolish " + id, danger: true);
+            }
+
             Section("Bewohner", "Arbeiter +1", "Arbeiter −1", "Kinder +1", "Alle Kranken heilen", "Arbeiter genau auf");
             if (!Searching)
             {
@@ -628,6 +776,28 @@ namespace IfzCoop
             Btn("Alle Trupps heilen", "heal");
             Btn("Munition auffüllen (je 100)", "ammo");
             GUILayout.EndHorizontal();
+
+            Section("Ausgewählte Trupps", "Ausgewählte heilen", "Unsterblich an", "Unsterblich aus", "Alle wieder sterblich");
+            if (!Searching)
+            {
+                GUILayout.Label(_selIds.Count == 0
+                    ? "Ausgewählt: keiner (Trupp im Spiel anklicken, mit Umschalt mehrere)"
+                    : "Ausgewählt: " + string.Join(", ", _selIds.Select(SquadName)));
+            }
+            if (_selIds.Count > 0)
+            {
+                string ids = string.Join(",", _selIds);
+                GUILayout.BeginHorizontal();
+                Btn("Ausgewählte heilen", "healsel " + ids);
+                Btn("Unsterblich an", "immortal 1 " + ids);
+                Btn("Unsterblich aus", "immortal 0 " + ids);
+                GUILayout.EndHorizontal();
+            }
+            if (!IsGuest && Immortal.Count > 0)
+            {
+                if (!Searching) GUILayout.Label("<color=#ffd24a>Unsterblich: " + string.Join(", ", Immortal.Select(SquadName)) + "</color>", _onStyle);
+                Btn("Alle wieder sterblich", "immortal 0 all");
+            }
             Section("Gegner", "Verstecke und Höhlen aufdecken", "Alle Infizierten-Horden töten");
             Btn("Verstecke und Höhlen aufdecken", "reveal");
             Btn("Alle Infizierten-Horden töten", "killhordes", danger: true);
