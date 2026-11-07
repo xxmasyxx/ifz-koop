@@ -12,7 +12,7 @@ namespace IfzCoop
     {
         public const string Guid = "de.ifzcoop";
         public const string Name = "IFZ Koop";
-        public const string Version = "0.23.11";
+        public const string Version = "0.23.12";
 
         internal static Plugin Instance;
         internal static ManualLogSource Log;
@@ -56,8 +56,11 @@ namespace IfzCoop
             LobbyMode = Config.Bind("Host", "Spielmodus", "koop", "Mehrspieler-Modus im Hauptmenü: koop oder versus.");
             GuestCheats = Config.Bind("Entwickler", "GaesteDuerfenMenue", false, "Gäste dürfen das Entwickler-Menü benutzen (ihre Klicks führt der Host aus). Im F6-Fenster umschaltbar.");
             CheatEnabled = Config.Bind("Entwickler", "MenueAn", true, "Entwickler-Menü erlauben (Rohstoffe, Forschung, Sofort-Bauen …).");
-            InstantBuildSetting = Config.Bind("Entwickler", "SofortBauen", false, "Jede Baustelle wird sofort fertig (im Entwickler-Menü umschaltbar).");
-            CheatWindow.InstantBuild = InstantBuildSetting.Value;
+            // „Sofort bauen“ gilt ab 0.23.12 nur für das laufende Spiel (Wunsch: nicht ins nächste Spiel mitnehmen).
+            // Alte gespeicherte Einstellung zurücksetzen.
+            InstantBuildSetting = Config.Bind("Entwickler", "SofortBauen", false, "Nicht mehr benutzt: „Sofort bauen“ gilt nur im laufenden Spiel (Entwickler-Menü).");
+            if (InstantBuildSetting.Value) InstantBuildSetting.Value = false;
+            CheatWindow.InstantBuild = false;
             MaxPlayers = Config.Bind("Host", "MaxSpieler", 4, "Spieler pro Lobby, Host eingeschlossen (2 bis 8).");
             GuestMayChangeSpeed = Config.Bind("Host", "GaesteDuerfenTempoAendern", true, "Gäste dürfen Pause und Spieltempo beim Host anfragen.");
             MyColorSetting = Config.Bind("Allgemein", "MeineFarbe", "", "Eigene Spielerfarbe als Hex (z. B. 4099FF), leer = automatisch. "
@@ -191,8 +194,12 @@ namespace IfzCoop
             try
             {
                 ShowUpdateNoteInMenu();
-                if (CheatWindow.Immortal.Count > 0 && !IfzCoop.Game.GameAccess.IsGameStarted)
-                    CheatWindow.Immortal.Clear(); // gilt nur für das laufende Spiel
+                if (!IfzCoop.Game.GameAccess.IsGameStarted)
+                {
+                    // gilt nur für das laufende Spiel
+                    if (CheatWindow.Immortal.Count > 0) CheatWindow.Immortal.Clear();
+                    CheatWindow.InstantBuild = false;
+                }
                 CheckStockOnce();
                 Menu.NoticeUi.Update();
             }

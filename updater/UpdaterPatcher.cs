@@ -130,7 +130,7 @@ namespace IfzCoop.Updater
                 }
             }
 
-            File.WriteAllText(NoteFile, local + "|" + remoteVersion);
+            File.WriteAllText(NoteFile, (local.Build >= 0 ? local.ToString(3) : local.ToString()) + "|" + remoteVersion);
             _log.LogMessage("IFZ Koop auf " + remoteVersion + " aktualisiert.");
         }
 

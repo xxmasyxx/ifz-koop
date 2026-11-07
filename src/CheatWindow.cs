@@ -216,8 +216,7 @@ namespace IfzCoop
                     return ok + " Forschungen fertig";
                 }
                 case "instant":
-                    InstantBuild = a[1] == "1";
-                    Plugin.InstantBuildSetting.Value = InstantBuild;
+                    InstantBuild = a[1] == "1"; // gilt nur für das laufende Spiel (nicht mehr gespeichert)
                     return InstantBuild ? "Sofort bauen AN" : "Sofort bauen AUS";
                 case "finish":
                     return FinishAllConstruction() + " Baustellen fertig";
@@ -772,7 +771,7 @@ namespace IfzCoop
             Section("Dauer-Schalter (bleiben an, bis du sie ausmachst)", FlagDefs.Select(f => f.label).Concat(new[] { "Sofort bauen" }).ToArray());
             if (Match("Sofort bauen"))
             {
-                bool now = GUILayout.Toggle(InstantBuild, " Sofort bauen  (jede Baustelle wird gleich fertig)");
+                bool now = GUILayout.Toggle(InstantBuild, " Sofort bauen  (jede Baustelle wird gleich fertig, nur in diesem Spiel)");
                 if (now != InstantBuild)
                     Run("instant " + (now ? "1" : "0"));
             }
