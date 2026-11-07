@@ -363,10 +363,29 @@ namespace IfzCoop
 
         // ------------------------------------------------------------------ Spielzeit
 
-        /// <summary>Gast: die Uhr des Hosts steht gerade still (zwei Zeit-Meldungen mit gleicher Uhrzeit bei laufendem Spiel).</summary>
-        public static bool HostClockFrozen;
-        private int _lastHostDay = -1;
-        private float _lastHostGts = -1f;
+        /// <summary>Gast: Uhr-Tempo des Hosts (F7 „Uhrzeit einfrieren“ / „Uhr-Tempo“), 1 = normal, 0 = steht.</summary>
+        public static float HostClockRate = 1f;
+        private float _lastHostTotal = -1f, _lastHostAt;
+
+        /// <summary>Uhr-Tempo des Hosts aus zwei Zeit-Meldungen: Uhr-Fortschritt / (Echtzeit · Spieltempo).</summary>
+        private void EstimateHostClockRate(float hostTotal, float speed)
+        {
+            float now = Time.realtimeSinceStartup;
+            float prev = _lastHostTotal, prevAt = _lastHostAt;
+            _lastHostTotal = hostTotal;
+            _lastHostAt = now;
+            float dt = now - prevAt;
+            if (prev < 0f || speed < 0.01f || dt < 0.3f || dt > 5f)
+                return;
+            float d = hostTotal - prev;
+            if (d < 0f) return; // Uhr zurückgesetzt (Uhrzeit setzen)
+            float r = d / (dt * speed);
+            if (r > 21f) return; // Sprung (Uhrzeit gesetzt), kein Tempo
+            if (r < 0.03f) r = 0f;
+            else if (Mathf.Abs(r - 1f) < 0.08f) r = 1f;
+            else r = Mathf.Round(r * 20f) / 20f;
+            HostClockRate = r;
+        }
 
         private static readonly System.Reflection.MethodInfo SetCurrentDayGtsMethod =
             HarmonyLib.AccessTools.Method(typeof(TimeController), "SetCurrentDayGts", new[] { typeof(float) });
@@ -1440,13 +1459,10 @@ namespace IfzCoop
                         // Die Nachricht ist eine halbe Pingzeit alt: so viel Spielzeit ist beim Host schon weiter.
                         float latency = _hostRttMs > 0 ? (float)(_hostRttMs / 2000.0) * speed : 0f;
                         TimeDriftSeconds = hostTotal + latency - localTotal;
-                        // Uhr des Hosts steht (F7 „Uhrzeit einfrieren“), obwohl das Spiel läuft: hier auch anhalten
-                        HostClockFrozen = speed > 0.01f && day == _lastHostDay && Mathf.Abs(dayGts - _lastHostGts) < 0.001f;
-                        _lastHostDay = day;
-                        _lastHostGts = dayGts;
+                        EstimateHostClockRate(hostTotal, speed);
                         if (!Mathf.Approximately(speed, TimeController.SpeedMultiplier))
                             ApplyHostSpeed(speed);
-                        if (HostClockFrozen) latency = 0f;
+                        latency *= HostClockRate;
                         CorrectTime(day, Mathf.Min(dayGts + latency, dayLength - 0.01f), dayLength);
                     }
                     break;

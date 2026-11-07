@@ -23,6 +23,7 @@ namespace IfzCoop
         {
             public int Version = 1;
             public bool InstantBuild, InstantMake, OneHitAll, InstantDemolish, InstantCustomize, FreezeClock;
+            public float ClockRate = 1f;
             public List<string> Immortal = new List<string>();
             public List<string> OneHit = new List<string>();
             public Dictionary<string, float> ScavBoost = new Dictionary<string, float>();
@@ -91,6 +92,7 @@ namespace IfzCoop
                 InstantDemolish = CheatWindow.InstantDemolish,
                 InstantCustomize = CheatWindow.InstantCustomize,
                 FreezeClock = CheatWindow.FreezeClock,
+                ClockRate = CheatWindow.ClockRate,
                 Immortal = CheatWindow.Immortal.ToList(),
                 OneHit = CheatWindow.OneHit.ToList(),
                 ScavBoost = new Dictionary<string, float>(CheatWindow.ScavBoost),
@@ -147,6 +149,7 @@ namespace IfzCoop
             CheatWindow.InstantDemolish = d.InstantDemolish;
             CheatWindow.InstantCustomize = d.InstantCustomize;
             CheatWindow.FreezeClock = d.FreezeClock;
+            CheatWindow.SetClockRate(d.ClockRate);
             Fill(CheatWindow.Immortal, d.Immortal);
             Fill(CheatWindow.OneHit, d.OneHit);
             Fill(CheatWindow.Indestructible, d.IndestructibleVehicles);
