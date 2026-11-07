@@ -279,6 +279,7 @@ namespace IfzCoop
                     return r.Count == 0 ? "Lager ist in Ordnung" : "Aus dem Lager entfernt: " + string.Join(", ", r);
                 }
                 case "vmod":
+                case "vunmod":
                 case "vfix":
                 case "vspawn":
                     return VehicleCmd(a);
@@ -694,6 +695,65 @@ namespace IfzCoop
             return null;
         }
 
+        /// <summary>
+        /// Fahrzeug sofort benutzbar: volles Leben, voller Tank, Zustand „geborgen“. Herrenlose Fahrzeuge stehen sonst als
+        /// „bergbar“ da: ein Trupp muss sie erst eine Weile bergen, und mit leerem Tank fahren sie nicht
+        /// (Bericht 2026-11-07: gespawnte Autos ließen sich nicht nehmen).
+        /// </summary>
+        internal static void MakeReady(Gameplay.Vehicles.Vehicle v)
+        {
+            if (v == null) return;
+            try { v.Health.SetHealthAmount01(1f); } catch { }
+            try { v.Fuel.FuelTank.SetQuantity(v.Fuel.FuelTank.MaxQuantity); } catch { }
+            try
+            {
+                if (v.VehicleState == Gameplay.Vehicles.Vehicle.VehicleStates.Recoverable || v.VehicleState == Gameplay.Vehicles.Vehicle.VehicleStates.BrokenDown)
+                    v.SetState(Gameplay.Vehicles.Vehicle.VehicleStates.Recovered);
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Umbau wieder ausbauen. Das Spiel hat dafür keine Funktion: wie AddModification rückwärts (aus der Liste nehmen,
+        /// Werte neu rechnen, Modell ausblenden, MG/Kanone aus), dann OnModificationsChanged → Vehicle rechnet Leben,
+        /// Tank, Kofferraum und Tempo neu. Der Kofferraum wird dabei neu angelegt, sein Inhalt wird mitgenommen.
+        /// </summary>
+        private static void RemoveModification(Gameplay.Vehicles.Vehicle v, Gameplay.Vehicles.ModificationType m)
+        {
+            var mh = v.ModificationHandler;
+            var keep = new List<KeyValuePair<Gameplay.GameResources.ResourceID, float>>();
+            try { if (v.Trunk?.Resources != null) keep.AddRange(v.Trunk.Resources); } catch { }
+            mh._modificationDict.Remove(m);
+            mh.ModificationSummaryInfo.UpdateInfo();
+            var t = HarmonyLib.Traverse.Create(mh);
+            try
+            {
+                var presenter = t.Field("_modificationModelPresenter").GetValue<Gameplay.Vehicles.ModificationModelPresenter>();
+                var models = presenter != null ? HarmonyLib.Traverse.Create(presenter).Field("modificationModels").GetValue<Array>() : null;
+                if (models != null)
+                    foreach (var mm in models)
+                    {
+                        var tm = HarmonyLib.Traverse.Create(mm);
+                        if (tm.Field("modificationType").GetValue<Gameplay.Vehicles.ModificationType>() == m)
+                            tm.Field("model").GetValue<GameObject>()?.SetActive(false);
+                    }
+            }
+            catch (Exception e) { Plugin.Log.LogDebug("Umbau ausblenden: " + e.Message); }
+            if (m == Gameplay.Vehicles.ModificationType.ve_mod_hcal || m == Gameplay.Vehicles.ModificationType.ve_mod_tank_cannon)
+            {
+                try { t.Field("_machineGunHandler").GetValue<Gameplay.Vehicles.MachineGunHandler>()?.SetEnabledState(false); } catch { }
+                try { t.Field("_vehicleAmmoContainer").GetValue<Gameplay.Vehicles.VehicleAmmoContainer>()?.SetModificationState(false); } catch { }
+            }
+            try { t.Field("OnModificationsChanged").GetValue<Action>()?.Invoke(); }
+            catch (Exception e) { Plugin.Log.LogDebug("Umbau neu rechnen: " + e.Message); }
+            try
+            {
+                foreach (var kv in keep)
+                    if (kv.Value > 0f) v.Trunk.ForceAddResource(kv.Key, kv.Value, Gameplay.GameResources.ResourceAddReason.None);
+            }
+            catch { }
+        }
+
         private static string VehicleCmd(string[] a)
         {
             var inv = System.Globalization.CultureInfo.InvariantCulture;
@@ -709,12 +769,20 @@ namespace IfzCoop
                     v.ModificationHandler.AddModification(m);
                     return ModLabel(m) + " eingebaut (" + VehicleLabel(v.Data.GetVehicleType()) + ")";
                 }
+                case "vunmod":
+                {
+                    var v = FindVehicle(a[1]);
+                    if (v == null) return "Fahrzeug nicht gefunden";
+                    var m = (Gameplay.Vehicles.ModificationType)int.Parse(a[2], inv);
+                    if (!v.ModificationHandler.HasModification(m)) return ModLabel(m) + " ist nicht eingebaut";
+                    RemoveModification(v, m);
+                    return ModLabel(m) + " ausgebaut (" + VehicleLabel(v.Data.GetVehicleType()) + ")";
+                }
                 case "vfix":
                 {
                     var v = FindVehicle(a[1]);
                     if (v == null) return "Fahrzeug nicht gefunden";
-                    v.Health.SetHealthAmount01(1f);
-                    v.Fuel.FuelTank.SetQuantity(v.Fuel.FuelTank.MaxQuantity);
+                    MakeReady(v);
                     return VehicleLabel(v.Data.GetVehicleType()) + " repariert und vollgetankt";
                 }
                 case "vspawn":
@@ -727,7 +795,8 @@ namespace IfzCoop
                     if (vc == null || ids == null || factory == null) return "Fahrzeuge gerade nicht möglich";
                     var v = factory.Create(ids.GetNextId(), type, pos, Quaternion.identity);
                     vc.InitAbandonedVehicle(v);
-                    return VehicleLabel(type) + " erzeugt";
+                    MakeReady(v);
+                    return VehicleLabel(type) + " erzeugt (fahrbereit, vollgetankt)";
                 }
             }
             return "?";
@@ -1927,14 +1996,15 @@ namespace IfzCoop
                     if (!Match(label)) continue;
                     if (col == 4) { GUILayout.EndHorizontal(); GUILayout.BeginHorizontal(); col = 0; }
                     col++;
+                    bool installed = why == "schon eingebaut";
                     bool ok = why == null;
-                    string text = ok ? label : label + "\n(" + (why == "schon eingebaut" ? "drin" : "passt nicht") + ")";
-                    string tip = ok ? label + " einbauen (sofort, kostenlos)" : label + ": " + why;
-                    if (IconButton(ModIcon(v, mod), text, tip, 140f, ok))
-                        Run("vmod " + v.Id + " " + (int)mod);
+                    string text = ok ? label : installed ? "✔ " + label + "\n(Klick = ausbauen)" : label + "\n(passt nicht)";
+                    string tip = ok ? label + " einbauen (sofort, kostenlos)" : installed ? label + " ist drin: Klick baut es wieder aus" : label + ": " + why;
+                    if (IconButton(ModIcon(v, mod), text, tip, 140f, ok || installed))
+                        Run((installed ? "vunmod " : "vmod ") + v.Id + " " + (int)mod);
                 }
                 GUILayout.EndHorizontal();
-                if (!Searching) GUILayout.Label("Ausgegraut = schon eingebaut oder passt nicht zu diesem Fahrzeug. Ausbauen geht in der Werkstatt.", _hint);
+                if (!Searching) GUILayout.Label("✔ = eingebaut, Klick baut es wieder aus. Ausgegraut = passt nicht zu diesem Fahrzeug.", _hint);
             }
 
             Section("Fahrzeug erzeugen", "Fahrzeug erzeugen", "Panzer", "Bus", "Lastwagen", "Panzerwagen");

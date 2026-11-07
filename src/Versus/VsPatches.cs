@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using Controllers;
 using Controllers.Time;
@@ -32,12 +32,16 @@ namespace IfzCoop.Versus
 
         private static VersusSession Vs => VersusSession.Instance;
 
+        private static void HqStoragePostfix(Gameplay.Buildings.Building __instance) => VsStart.UpdateStoragePostfix(__instance);
+
         public static void Apply(Harmony harmony)
         {
             // HQ-Wahl (privat, über PopupButtonSettings-Delegate aufgerufen)
             TryPatch(harmony, typeof(HqSetterController), "OnSelectionConfirmed", nameof(ConfirmPrefix), nameof(ConfirmPostfix));
             // Verstecke nicht an Gast-HQs (protected virtual)
             TryPatch(harmony, typeof(HideoutSpawnPointSpawner), "IsToCloseHq", null, nameof(IsToCloseHqPostfix));
+            TryPatch(harmony, typeof(Gameplay.Buildings.Building), "UpdateStorage", null, nameof(HqStoragePostfix));
+            TryPatch(harmony, typeof(Gameplay.Buildings.Building), "UpdateProduction", null, nameof(HqStoragePostfix));
 
             // Tempo und Pause nur vom Host
             TryPatchExact(harmony, typeof(TimeChangerController), nameof(TimeChangerController.SetSpeedMultiplier), new[] { typeof(float), typeof(bool) },

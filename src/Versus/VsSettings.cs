@@ -20,7 +20,7 @@ namespace IfzCoop.Versus
     /// </summary>
     internal sealed class VsSettings
     {
-        private const byte FormatVersion = 2;
+        private const byte FormatVersion = 3;
 
         /// <summary>Wählbare Start-Rohstoffe (zusätzlich zur normalen Startausstattung des Spiels im HQ).</summary>
         public static readonly (string label, ResourceID id)[] ResourceChoices =
@@ -63,6 +63,20 @@ namespace IfzCoop.Versus
 
         public int VehicleAmount(VehicleType t) => Vehicles.TryGetValue(t, out var v) ? v : 0;
 
+        /// <summary>false = HQ wie im Spiel (hängt vom gewählten Gebäude ab). true = alle HQs gleich stark (Werte unten).</summary>
+        public bool HqEqual;
+
+        /// <summary>Grund-Leben des HQ (ohne Verstärkung).</summary>
+        public int HqHp = 5000;
+
+        /// <summary>Verstärkung (UI.InfoPanels.EnforcementType): 0 keine, 1 Holzbretter, 2 Metallgitter, 3 Ziegel.</summary>
+        public int HqEnforcement = 1;
+
+        /// <summary>Lagerplatz im HQ (Kisten).</summary>
+        public int HqStorage = 400;
+
+        public static readonly string[] EnforcementLabels = { "keine", "Holzbretter", "Metallgitter", "Ziegel" };
+
         /// <summary>Arbeiter (Erwachsene ohne Trupp) nach der HQ-Wahl. 0 = wie im Spiel (keine Änderung).</summary>
         public int Workers = 20;
 
@@ -99,6 +113,10 @@ namespace IfzCoop.Versus
         {
             Mode = o.Mode;
             CustomStart = o.CustomStart;
+            HqEqual = o.HqEqual;
+            HqHp = o.HqHp;
+            HqEnforcement = o.HqEnforcement;
+            HqStorage = o.HqStorage;
             Vehicles.Clear();
             foreach (var kv in o.Vehicles)
                 Vehicles[kv.Key] = kv.Value;
@@ -122,6 +140,9 @@ namespace IfzCoop.Versus
             Squads = Math.Max(0, Math.Min(6, Squads));
             SquadSize = Math.Max(1, Math.Min(10, SquadSize));
             MaxPlayers = Math.Max(2, Math.Min(VsProtocol.MaxPlayers, MaxPlayers));
+            HqHp = Math.Max(100, Math.Min(1000000, HqHp));
+            HqEnforcement = Math.Max(0, Math.Min(3, HqEnforcement));
+            HqStorage = Math.Max(10, Math.Min(100000, HqStorage));
             var keys = new List<ResourceID>(Resources.Keys);
             foreach (var k in keys)
             {
@@ -166,12 +187,16 @@ namespace IfzCoop.Versus
                 w.Write((int)kv.Key);
                 w.Write(kv.Value);
             }
+            w.Write(HqEqual);
+            w.Write(HqHp);
+            w.Write((byte)HqEnforcement);
+            w.Write(HqStorage);
         }
 
         public static VsSettings Read(BinaryReader r)
         {
             byte version = r.ReadByte();
-            if (version != FormatVersion && version != 1)
+            if (version < 1 || version > FormatVersion)
                 throw new InvalidDataException("Versus-Einstellungen Format " + version);
             var s = new VsSettings();
             s.Revision = r.ReadInt32();
@@ -200,6 +225,13 @@ namespace IfzCoop.Versus
                     s.Vehicles[t] = r.ReadInt32();
                 }
             }
+            if (version >= 3)
+            {
+                s.HqEqual = r.ReadBoolean();
+                s.HqHp = r.ReadInt32();
+                s.HqEnforcement = r.ReadByte();
+                s.HqStorage = r.ReadInt32();
+            }
             s.Clamp();
             return s;
         }
@@ -210,6 +242,7 @@ namespace IfzCoop.Versus
             var sb = new StringBuilder();
             sb.Append("mode=").Append(Mode)
               .Append(" start=").Append(CustomStart ? "custom" : "map")
+              .Append(" hq=").Append(HqEqual ? HqHp + "/" + HqEnforcement + "/" + HqStorage : "game")
               .Append(" workers=").Append(Workers)
               .Append(" squads=").Append(Squads).Append('x').Append(SquadSize)
               .Append(" scavVisible=").Append(ScavengedVisible ? 1 : 0)
@@ -257,6 +290,18 @@ namespace IfzCoop.Versus
                         case "teams": case "1": Mode = VsMode.Teams; return true;
                         case "allied": case "2": Mode = VsMode.AllAllied; return true;
                     }
+                    break;
+                case "hq":
+                    HqEqual = value != "0" && value.ToLowerInvariant() != "game";
+                    return true;
+                case "hqhp":
+                    if (int.TryParse(value, NumberStyles.Integer, inv, out HqHp)) return true;
+                    break;
+                case "hqenf":
+                    if (int.TryParse(value, NumberStyles.Integer, inv, out HqEnforcement)) return true;
+                    break;
+                case "hqstorage":
+                    if (int.TryParse(value, NumberStyles.Integer, inv, out HqStorage)) return true;
                     break;
                 case "start":
                     CustomStart = value.ToLowerInvariant() != "map" && value != "0";

@@ -259,10 +259,56 @@ namespace IfzCoop.Versus
                 GUILayout.Label("  Jeder startet mit dem, was die Karte vorgibt (Einwohner, Trupps, Rohstoffe). Nichts wird geändert.");
             else
                 changed |= DrawCustomStart(s, edit);
+            changed |= DrawHq(s, edit);
             DrawRest(vs, s, edit, ref changed);
 
             if (changed && edit)
                 vs.MarkSettingsChanged();
+        }
+
+        private static string _hqHpInput, _hqStorageInput;
+
+        private static bool DrawHq(VsSettings s, bool edit)
+        {
+            bool changed = false;
+            GUILayout.Label("HQ (Leben, Verstärkung, Lagerplatz):");
+            int hq = Choice(s.HqEqual ? 1 : 0, new[] { "Standard (hängt vom Gebäude ab)", "Bei allen gleich" }, edit);
+            if ((hq == 1) != s.HqEqual) { s.HqEqual = hq == 1; changed = true; }
+            if (!s.HqEqual)
+                return changed;
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("  Leben (ohne Verstärkung)", GUILayout.Width(190f));
+            changed |= NumberField(ref s.HqHp, ref _hqHpInput, new[] { 2000, 5000, 10000, 20000 }, edit);
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("  Verstärkung (Mauern)", GUILayout.Width(190f));
+            int enf = Choice(s.HqEnforcement, VsSettings.EnforcementLabels, edit);
+            if (enf != s.HqEnforcement) { s.HqEnforcement = enf; changed = true; }
+            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("  Lagerplatz (Kisten)", GUILayout.Width(190f));
+            changed |= NumberField(ref s.HqStorage, ref _hqStorageInput, new[] { 200, 400, 800, 1500 }, edit);
+            GUILayout.EndHorizontal();
+            GUILayout.Label("  Gilt ab der HQ-Wahl. Weitere Lagerhäuser kann jeder wie sonst dazubauen.");
+            return changed;
+        }
+
+        /// <summary>Knöpfe mit festen Werten plus Zahlenfeld.</summary>
+        private static bool NumberField(ref int value, ref string input, int[] presets, bool edit)
+        {
+            var inv = CultureInfo.InvariantCulture;
+            if (!edit)
+            {
+                GUILayout.Label(value.ToString(inv));
+                return false;
+            }
+            int old = value;
+            foreach (int p in presets)
+                if (GUILayout.Toggle(value == p, p.ToString(inv), GUI.skin.button, GUILayout.Width(56f)) && value != p) { value = p; input = null; }
+            if (input == null) input = value.ToString(inv);
+            input = GUILayout.TextField(input, 7, GUILayout.Width(64f));
+            if (int.TryParse(input, NumberStyles.Integer, inv, out var v) && v > 0 && v != value) value = v;
+            return value != old;
         }
 
         private static bool DrawCustomStart(VsSettings s, bool edit)

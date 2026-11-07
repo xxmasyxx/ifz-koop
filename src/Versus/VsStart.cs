@@ -493,6 +493,8 @@ namespace IfzCoop.Versus
             var sb = new StringBuilder();
             var hq = HqController.MainHeadquarter;
             var hqPos = hq != null ? hq.Position : MyHqPos;
+            try { ApplyHq(s, hq as Building); }
+            catch (Exception e) { Plugin.Log.LogError("IFZVS HQ-Stärke: " + e); }
             if (!s.CustomStart)
             {
                 AppliedSummary = "Standard (wie auf der Karte)";
@@ -580,6 +582,37 @@ namespace IfzCoop.Versus
                 _vs.SendToHost(BuildPopulation());
         }
 
+        /// <summary>Fester Lagerplatz des eigenen HQ (Versus „HQ bei allen gleich“), 0 = wie im Spiel.</summary>
+        internal static int ForcedHqStorage;
+
+        private static readonly AccessTools.FieldRef<Building, BuildingEnforcementHandler> EnforcementOf =
+            AccessTools.FieldRefAccess<Building, BuildingEnforcementHandler>("EnforcementHandler");
+
+        /// <summary>HQ bei allen gleich: Grund-Leben, Verstärkung (wie „Anpassen“ im Spiel) und Lagerplatz fest setzen.</summary>
+        private static void ApplyHq(VsSettings s, Building hq)
+        {
+            ForcedHqStorage = 0;
+            if (!s.HqEqual || hq == null)
+                return;
+            hq.Health.SetMaxHp(s.HqHp);
+            var eh = EnforcementOf(hq);
+            if (eh != null) eh.SetEnforcement((UI.InfoPanels.EnforcementType)s.HqEnforcement);
+            hq.Health.SetHealthAmount01(1f);
+            ForcedHqStorage = s.HqStorage;
+            hq.StructureResourceContainer.SetCapacity(s.HqStorage, force: true);
+            Plugin.Log.LogInfo("IFZVS HQ gleich: Leben " + hq.Health.MaxHp.ToString("0") + ", Verstärkung " + s.HqEnforcement + ", Lager " + s.HqStorage);
+        }
+
+        /// <summary>Postfix Building.UpdateStorage/UpdateProduction: das Spiel rechnet den Lagerplatz aus der Größe neu, der feste Wert bleibt.</summary>
+        internal static void UpdateStoragePostfix(Building __instance)
+        {
+            if (ForcedHqStorage <= 0)
+                return;
+            if (!VersusSession.Active) { ForcedHqStorage = 0; return; }
+            if (__instance != null && __instance == HqController.MainHeadquarter)
+                __instance.StructureResourceContainer.SetCapacity(ForcedHqStorage, force: true);
+        }
+
         private static readonly System.Reflection.MethodInfo NearestOnRoad =
             AccessTools.Method(typeof(Utilities.PathfindingUtils), "GetNearestOnRoad", new[] { typeof(Vector3) });
 
@@ -627,6 +660,7 @@ namespace IfzCoop.Versus
                 {
                     var v = factory.Create(ids.GetNextId(), list[i], pos, Quaternion.Euler(0f, a * Mathf.Rad2Deg, 0f));
                     vc.InitAbandonedVehicle(v);
+                    CheatWindow.MakeReady(v);
                     made++;
                 }
                 catch (Exception e) { Plugin.Log.LogWarning("IFZVS Start-Fahrzeug " + list[i] + ": " + e.Message); }
