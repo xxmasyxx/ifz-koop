@@ -835,6 +835,42 @@ namespace IfzCoop
             return s;
         }
 
+        private readonly Dictionary<Gameplay.Vehicles.VehicleType, Sprite> _vehIcons = new Dictionary<Gameplay.Vehicles.VehicleType, Sprite>();
+        private GUIStyle _cardText;
+
+        /// <summary>Bild des Fahrzeugs wie im Fahrzeug-Fenster (GroupIcons.conceptSprite, sonst iconSprite).</summary>
+        private Sprite VehicleIcon(Gameplay.Vehicles.VehicleType t)
+        {
+            if (_vehIcons.TryGetValue(t, out var s)) return s;
+            s = null;
+            try
+            {
+                var stats = GameAccess.Game<Gameplay.Vehicles.VehiclesStats>();
+                if (stats?.allVehicleStats != null)
+                    foreach (var d in stats.allVehicleStats)
+                        if (d != null && d.GetId() == t.ToString())
+                        {
+                            s = d.GroupIcons.conceptSprite != null ? d.GroupIcons.conceptSprite : d.GroupIcons.iconSprite;
+                            break;
+                        }
+            }
+            catch { s = null; }
+            if (s != null || GameAccess.IsGameStarted) _vehIcons[t] = s;
+            return s;
+        }
+
+        /// <summary>Bildkarte: großes Bild oben, Name darunter, Hinweis beim Drüberfahren.</summary>
+        private bool VehicleCard(Sprite icon, string label, string tooltip)
+        {
+            if (_cardText == null)
+                _cardText = new GUIStyle(GUI.skin.label) { fontSize = 12, alignment = TextAnchor.MiddleCenter };
+            var r = GUILayoutUtility.GetRect(134f, 86f, GUILayout.Width(134f), GUILayout.Height(86f));
+            bool clicked = GUI.Button(r, new GUIContent("", tooltip));
+            if (icon != null) DrawSprite(new Rect(r.x + 5f, r.y + 4f, r.width - 10f, 58f), icon);
+            GUI.Label(new Rect(r.x + 2f, r.yMax - 24f, r.width - 4f, 22f), label, _cardText);
+            return clicked;
+        }
+
         /// <summary>Sprite in IMGUI zeichnen (auch aus einem Atlas), Seitenverhältnis bleibt.</summary>
         private static void DrawSprite(Rect r, Sprite s)
         {
@@ -846,7 +882,7 @@ namespace IfzCoop
             var uv = new Rect(x0, y0, x1 - x0, y1 - y0);
             float aspect = s.rect.height > 0f ? s.rect.width / s.rect.height : 1f;
             float w = r.width, h = r.height;
-            if (aspect > 1f) h = w / aspect; else w = h * aspect;
+            if (aspect > r.width / Mathf.Max(1f, r.height)) h = w / aspect; else w = h * aspect;
             GUI.DrawTextureWithTexCoords(new Rect(r.x + (r.width - w) / 2f, r.y + (r.height - h) / 2f, w, h), s.texture, uv, true);
         }
 
@@ -1063,10 +1099,16 @@ namespace IfzCoop
 
             Section("Fahrzeug erzeugen", "Fahrzeug erzeugen", "Panzer", "Bus", "Lastwagen", "Panzerwagen");
             if (Searching && !VehicleTypes.Any(t => Match(t.label)) && !Match("Fahrzeug erzeugen")) return;
-            _spawnIdx = GUILayout.SelectionGrid(Mathf.Clamp(_spawnIdx, 0, VehicleTypes.Length - 1), VehicleTypes.Select(t => t.label).ToArray(), 5);
-            if (GUILayout.Button("„" + VehicleTypes[_spawnIdx].label + "“ erzeugen: danach einmal auf die Karte klicken"))
-                StartSpawnCursor(VehicleTypes[_spawnIdx].type);
-            if (!Searching) GUILayout.Label("Knopf drücken, dann einmal auf die Karte klicken = ein Fahrzeug (Rechtsklick bricht ab). Für das nächste wieder den Knopf. Das Fahrzeug steht herrenlos da: mit einem Trupp einsteigen.", _hint);
+            if (!Searching) GUILayout.Label("Fahrzeug anklicken, dann einmal auf die Karte klicken = ein Fahrzeug (Rechtsklick bricht ab). Es steht herrenlos da: mit einem Trupp einsteigen.", _hint);
+            var shown = VehicleTypes.Where(t => !Searching || Match(t.label) || Match("Fahrzeug erzeugen")).ToArray();
+            for (int i = 0; i < shown.Length; i += 4)
+            {
+                GUILayout.BeginHorizontal();
+                for (int j = i; j < i + 4 && j < shown.Length; j++)
+                    if (VehicleCard(VehicleIcon(shown[j].type), shown[j].label, shown[j].label + " erzeugen: danach einmal auf die Karte klicken"))
+                        StartSpawnCursor(shown[j].type);
+                GUILayout.EndHorizontal();
+            }
         }
 
         private void StartSpawnCursor(Gameplay.Vehicles.VehicleType type)
