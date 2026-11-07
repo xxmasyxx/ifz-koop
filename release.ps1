@@ -41,7 +41,10 @@ Compress-Archive -Path (Join-Path $pkg '*') -DestinationPath $zip -Force
 Copy-Item $zip (Join-Path $root "dist\IfzCoop-$ver.zip") -Force
 
 $assets = @('version.txt', 'IfzCoop.dll', 'IfzCoop.Updater.dll', 'IfzCoop.zip') | ForEach-Object { Join-Path $out $_ }
-$ghArgs = @('release', 'create', "v$ver") + $assets + @('--title', "IFZ Koop $ver", '--notes', $(if ($Notes) { $Notes } else { "IFZ Koop $ver" }))
+# Text ueber Datei (PowerShell 5.1 zerlegt Anfuehrungszeichen in Argumenten an Programme)
+$notesFile = Join-Path $out 'notes.md'
+[IO.File]::WriteAllText($notesFile, $(if ($Notes) { $Notes } else { "IFZ Koop $ver" }), (New-Object Text.UTF8Encoding $false))
+$ghArgs = @('release', 'create', "v$ver") + $assets + @('--title', "IFZ Koop $ver", '--notes-file', $notesFile)
 if ($Draft) { $ghArgs += '--draft' }
 Push-Location $root
 try { & $gh @ghArgs; if ($LASTEXITCODE -ne 0) { throw 'gh release create fehlgeschlagen' } }

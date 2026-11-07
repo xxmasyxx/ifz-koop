@@ -103,7 +103,9 @@ namespace IfzCoop
         private static bool EndgamePrefix(GameOverController.FailReason failReason)
         {
             var session = Plugin.Instance?.Session;
-            if (session == null || !session.GuestControlsLocked || session.ApplyingGameOver)
+            // Auch während der Gast den Spielstand lädt (GuestState noch nicht InGame) sperren: beim Laden stehen die
+            // Bürgerzähler kurz auf 0, das Spiel meldete dann „Die Zone ist gefallen“ (Bericht 2026-11-07 crazydrifter31).
+            if (session == null || session.Role != Role.Guest || session.ApplyingGameOver)
                 return true;
             Plugin.Log.LogInfo("Spielende beim Gast unterdrückt (kommt vom Host): " + failReason);
             return false;

@@ -20,6 +20,7 @@ namespace IfzCoop.Menu
         public static bool Visible { get; private set; }
 
         private static Rect _rect = new Rect(0f, 0f, 900f, 300f);
+        private static float _width = 900f;
         private static GUIStyle _head, _cell, _name, _title, _box;
         private static Texture2D _bg, _rowBg;
         private static EventSystem _disabledEs;
@@ -33,8 +34,8 @@ namespace IfzCoop.Menu
             Visible = !Visible;
             if (Visible)
             {
-                _rect.width = Mathf.Min(980f, Screen.width - 40f);
-                _rect.x = (Screen.width - _rect.width) / 2f;
+                _width = Mathf.Min(980f, Screen.width - 40f);
+                _rect = new Rect((Screen.width - _width) / 2f, 0f, _width, 300f);
                 _rect.y = Screen.height * 0.18f;
                 _menuOpen = true;
                 _nextMenuCheck = Time.realtimeSinceStartup + 0.5f;
@@ -109,7 +110,10 @@ namespace IfzCoop.Menu
                 return;
             }
             EnsureStyles();
-            _rect = GUILayout.Window(WindowId, _rect, DrawWindow, "STATISTIK", _box, GUILayout.Width(_rect.width));
+            // Breite fest halten: GUILayout würde das Fenster sonst jedes Bild um die Label-Ränder verbreitern
+            // (Spaltenbreite hängt an der Fensterbreite → Rückkopplung, Fenster wuchs endlos).
+            var r = GUILayout.Window(WindowId, _rect, DrawWindow, "STATISTIK", _box, GUILayout.Width(_width), GUILayout.MaxWidth(_width));
+            _rect = new Rect(r.x, r.y, _width, r.height);
 
             // Klicks über dem Fenster nicht an die Spiel-Oberfläche durchreichen
             var mouse = new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
@@ -154,10 +158,11 @@ namespace IfzCoop.Menu
             catch (Exception e) { GUILayout.Label("Fehler: " + e.Message); return; }
 
             float nameW = 220f;
-            float colW = (_rect.width - 32f - nameW) / Short.Length;
+            // Innenbreite = Fensterbreite minus Polster (16+16); je Label kommen noch 4+4 Rand dazu
+            float colW = Mathf.Floor((_width - 32f - nameW - 8f * (Short.Length + 1)) / Short.Length);
 
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Spieler", _head, GUILayout.Width(nameW));
+            GUILayout.Label("Spieler", _head, GUILayout.Width(nameW - 8f));
             _head.alignment = TextAnchor.MiddleRight;
             foreach (var h in Short) GUILayout.Label(h, _head, GUILayout.Width(colW));
             GUILayout.EndHorizontal();
