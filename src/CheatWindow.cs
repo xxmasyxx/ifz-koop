@@ -265,6 +265,21 @@ namespace IfzCoop
                 case "vfix":
                 case "vspawn":
                     return VehicleCmd(a);
+                case "vhard":
+                {
+                    var v = FindVehicle(a[1]);
+                    if (v == null) return "Fahrzeug nicht gefunden";
+                    bool on = a[2] == "1";
+                    if (on) { Indestructible.Add(v.Id); v.Health.SetHealthAmount01(1f); } else Indestructible.Remove(v.Id);
+                    return VehicleLabel(v.Data.GetVehicleType()) + (on ? " unzerstörbar" : " wieder zerstörbar");
+                }
+                case "instantmake":
+                    InstantMake = a[1] == "1";
+                    return InstantMake ? "Sofort herstellen AN" : "Sofort herstellen AUS";
+                case "sqskill":
+                case "sqweapon":
+                case "sqgear":
+                    return SquadCmd(a);
                 case "healsel":
                 {
                     var groups = SquadsById(a[1].Split(',')).ToList();
@@ -393,7 +408,9 @@ namespace IfzCoop
             var on = new List<string>();
             if (InstantBuild) on.Add("Sofort bauen");
             foreach (var f in FlagDefs) if (FlagOn(f.key)) on.Add(f.label);
+            if (InstantMake) on.Add("Sofort herstellen");
             if (Immortal.Count > 0) on.Add(Immortal.Count + (Immortal.Count == 1 ? " Trupp" : " Trupps") + " unsterblich");
+            if (Indestructible.Count > 0) on.Add(Indestructible.Count + (Indestructible.Count == 1 ? " Fahrzeug" : " Fahrzeuge") + " unzerstörbar");
             return on.Count == 0 ? "keine Schalter an" : string.Join(", ", on);
         }
 
@@ -428,15 +445,24 @@ namespace IfzCoop
         /// <summary>Jedes Bild: Sofort-Bauen.</summary>
         public void Update()
         {
-            if (!InstantBuild || !Allowed || IsGuest)
-                return; // Sofort-Bauen rechnet nur der Host
+            if ((!InstantBuild && !InstantMake) || !Allowed || IsGuest)
+                return; // Sofort-Bauen/-Herstellen rechnet nur der Host
             float now = Time.realtimeSinceStartup;
             if (now < _nextInstant)
                 return;
             _nextInstant = now + InstantInterval;
-            int n = FinishAllConstruction();
-            if (n > 0)
-                Plugin.Log.LogInfo($"IFZCOOP Entwickler: {n} Baustellen sofort fertig");
+            if (InstantBuild)
+            {
+                int n = FinishAllConstruction();
+                if (n > 0)
+                    Plugin.Log.LogInfo($"IFZCOOP Entwickler: {n} Baustellen sofort fertig");
+            }
+            if (InstantMake)
+            {
+                int m = MakeAllNow();
+                if (m > 0)
+                    Plugin.Log.LogInfo($"IFZCOOP Entwickler: {m} Aufträge sofort hergestellt");
+            }
         }
 
         public void Draw()
@@ -629,7 +655,7 @@ namespace IfzCoop
             return "?";
         }
 
-        private static List<string> CurrentSelection()
+        private List<string> CurrentSelection()
         {
             var ids = new List<string>();
             try
@@ -638,9 +664,180 @@ namespace IfzCoop
                 if (sel != null)
                     foreach (var g in sel)
                         if (g != null && !string.IsNullOrEmpty(g.Id) && !ids.Contains(g.Id)) ids.Add(g.Id);
+                // Trupp-Fenster offen, aber nicht „ausgewählt“ (Bericht 2026-11-07): den gezeigten Trupp nehmen
+                if (ids.Count == 0)
+                {
+                    if (_infoPanel == null) _infoPanel = UnityEngine.Object.FindObjectOfType<Controllers.InfoPanelController>();
+                    if (_infoPanel != null && _infoPanel.CurrentDisplayedPanel is UI.InfoPanels.SquadPanelInfo sp
+                        && sp.Squad != null && !string.IsNullOrEmpty(sp.Squad.Id))
+                        ids.Add(sp.Squad.Id);
+                }
             }
             catch { }
             return ids;
+        }
+
+        // ================================================================ Sofort herstellen, Fahrzeuge unzerstörbar
+
+        /// <summary>„Sofort herstellen“: Trupp-Ausbildung, Werkstatt-Aufträge, Produktion. Nur im laufenden Spiel.</summary>
+        public static bool InstantMake;
+
+        /// <summary>Unzerstörbare Fahrzeuge (Vehicle.Id). UnitPatches.VehicleHpPrefix auf Vehicle.SubtractHp.</summary>
+        public static readonly HashSet<string> Indestructible = new HashSet<string>();
+
+        private static readonly HarmonyLib.AccessTools.FieldRef<Gameplay.Buildings.Building, Gameplay.Buildings.GarageHandler> GarageRef =
+            HarmonyLib.AccessTools.FieldRefAccess<Gameplay.Buildings.Building, Gameplay.Buildings.GarageHandler>("GarageHandler");
+
+        private static int MakeAllNow()
+        {
+            int n = 0;
+            // Trupps: Ausbildungszeit voll, fertig sobald die Arbeiter im Gebäude sind (SquadCreatorModule.CustomUpdate)
+            try
+            {
+                var sc = GameAccess.Game<SquadCreatorController>();
+                if (sc != null)
+                    foreach (var s in sc.StructuresWithSquadCreator.ToList())
+                    {
+                        var m = Sync.SquadQueueSync.Module(s);
+                        if (m?.CurrentRequest == null || m.CurrentRequest.Progress >= 1f) continue;
+                        var t = HarmonyLib.Traverse.Create(m);
+                        float total = t.Field("_totalProductionTime").GetValue<float>();
+                        if (total > 0f && t.Field("_currentProductionTime").GetValue<float>() < total)
+                        {
+                            t.Field("_currentProductionTime").SetValue(total);
+                            n++;
+                        }
+                    }
+            }
+            catch (Exception e) { Plugin.Log.LogDebug("Sofort herstellen Trupps: " + e.Message); }
+
+            var bc = GameAccess.Game<BuildingsController>();
+            if (bc?.Buildings == null) return n;
+            var shop = GameAccess.Game<Gameplay.Units.Workers.CarWorkshopController>();
+            foreach (var b in bc.Buildings.ToList())
+            {
+                if (b == null) continue;
+                // Werkstatt: laufenden Auftrag abschließen (wie Testbefehl "shop done")
+                try
+                {
+                    var w = b.CarWorkshopWork;
+                    if (shop != null && w?.CurrentRequest != null && !w.CurrentRequest.IsComplete
+                        && (w.CurrentRequest.Type == Gameplay.Buildings.CarWorkshopRequestType.Deconstruction || (GarageRef(b)?.HasGarage ?? false)))
+                    {
+                        w.CurrentRequest.SetProgress(1f);
+                        HarmonyLib.AccessTools.Method(typeof(Gameplay.Units.Workers.CarWorkshopController), "HandleRequestCompleted").Invoke(shop, new object[] { w });
+                        n++;
+                    }
+                }
+                catch (Exception e) { Plugin.Log.LogDebug($"Sofort herstellen Werkstatt {b.ID}: {e.Message}"); }
+                // Produktion: begonnene Runde gleich fertig (beim nächsten Arbeitsschritt kommt das Ergebnis)
+                try
+                {
+                    var pw = b.ProductionWork;
+                    var pd = pw?.ProductionData;
+                    if (pd != null && pw.CurrentProductionTime > 0f && pw.CurrentProductionTime < pd.GetProductionTime())
+                    {
+                        pw.SetCurrentProductionTime(pd.GetProductionTime());
+                        n++;
+                    }
+                }
+                catch (Exception e) { Plugin.Log.LogDebug($"Sofort herstellen Produktion {b.ID}: {e.Message}"); }
+            }
+            return n;
+        }
+
+        // ================================================================ Trupps: Fähigkeiten, Waffen, Schutz
+
+        private static readonly (Gameplay.Units.Skills.SkillId id, string label)[] SkillDefs =
+        {
+            (Gameplay.Units.Skills.SkillId.Slasher, "Nahkämpfer"), (Gameplay.Units.Skills.SkillId.Strong, "Stark"),
+            (Gameplay.Units.Skills.SkillId.HawkEye, "Adlerauge"), (Gameplay.Units.Skills.SkillId.SharpShooter, "Scharfschütze"),
+            (Gameplay.Units.Skills.SkillId.RaceDriver, "Rennfahrer"), (Gameplay.Units.Skills.SkillId.EconomicDriver, "Sparfahrer"),
+            (Gameplay.Units.Skills.SkillId.Shoplifter, "Langfinger"), (Gameplay.Units.Skills.SkillId.Inspector, "Spürnase"),
+        };
+
+        private readonly Dictionary<Gameplay.Units.Skills.SkillId, Sprite> _skillIcons = new Dictionary<Gameplay.Units.Skills.SkillId, Sprite>();
+
+        private Sprite SkillIcon(Gameplay.Units.Skills.SkillId id, IEnumerable<Group> groups)
+        {
+            if (_skillIcons.TryGetValue(id, out var s) && s != null) return s;
+            try
+            {
+                foreach (var g in groups)
+                    foreach (var c in g.Characters)
+                        foreach (var sk in c.SkillsHandler.Skills)
+                            if (sk.Id == id && sk.IconSprite != null) { _skillIcons[id] = sk.IconSprite; return sk.IconSprite; }
+            }
+            catch { }
+            return null;
+        }
+
+        /// <summary>Wie viele Figuren der Trupps haben die Fähigkeit aktiv (von wie vielen).</summary>
+        private static (int on, int all) SkillCount(IEnumerable<Group> groups, Gameplay.Units.Skills.SkillId id)
+        {
+            int on = 0, all = 0;
+            foreach (var g in groups)
+                foreach (var c in g.Characters)
+                {
+                    if (c == null || c.IsDead()) continue;
+                    all++;
+                    if (c.SkillsHandler != null && c.SkillsHandler.HasActiveSkill(id)) on++;
+                }
+            return (on, all);
+        }
+
+        private static string SquadCmd(string[] a)
+        {
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            var groups = SquadsById(a[1].Split(',')).ToList();
+            if (groups.Count == 0) return "Trupp nicht gefunden";
+            string names = string.Join(", ", groups.Select(g => SquadName(g.Id)));
+            int k = 0;
+            switch (a[0])
+            {
+                case "sqskill":
+                {
+                    var id = (Gameplay.Units.Skills.SkillId)int.Parse(a[2], inv);
+                    bool on = a[3] == "1";
+                    foreach (var g in groups)
+                        foreach (var c in g.Characters)
+                        {
+                            if (c?.SkillsHandler == null || c.IsDead()) continue;
+                            foreach (var sk in c.SkillsHandler.Skills)
+                                if (sk.Id == id && sk.IsActivated != on) { sk.SetActiveStatus(on); k++; }
+                        }
+                    string label = SkillDefs.FirstOrDefault(x => x.id == id).label ?? id.ToString();
+                    return $"{label} {(on ? "gegeben" : "entfernt")}: {k} Figuren ({names})";
+                }
+                case "sqweapon":
+                {
+                    var id = (ResourceID)int.Parse(a[2], inv);
+                    foreach (var g in groups)
+                        foreach (var c in g.Characters)
+                        {
+                            if (c?.ItemsContainer == null || c.IsDead()) continue;
+                            if (c.ItemsContainer.WeaponHandler.TryAssignWeapon(id, dropPreviousWeapon: false))
+                            {
+                                c.CharacterTextureRandomizer?.SetWeaponAppearance(id);
+                                k++;
+                            }
+                        }
+                    return $"{LabelOf(id)} an {k} Figuren ({names})";
+                }
+                case "sqgear":
+                {
+                    var id = (ResourceID)int.Parse(a[2], inv);
+                    foreach (var g in groups)
+                        foreach (var c in g.Characters)
+                        {
+                            if (c?.ItemsContainer == null || c.IsDead()) continue;
+                            c.ItemsContainer.GearHandler.AssignGear(id, 1f, dropPreviousGear: false);
+                            k++;
+                        }
+                    return $"{LabelOf(id)} an {k} Figuren ({names})";
+                }
+            }
+            return "?";
         }
 
         private static IEnumerable<Group> SquadsById(IEnumerable<string> ids)
@@ -716,6 +913,7 @@ namespace IfzCoop
         private void DrawContents(int id)
         {
             EnsureStyles();
+            GUI.tooltip = ""; // sonst bleibt der Hinweis eines anderen Reiters stehen
             // immer sichtbar: was gerade an ist, Rolle, Suche
             GUILayout.Label("<b>Aktiv:</b> " + ActiveSummary(), _onStyle);
             if (_session.Role == Role.Host)
@@ -768,12 +966,18 @@ namespace IfzCoop
 
         private void DrawFlags()
         {
-            Section("Dauer-Schalter (bleiben an, bis du sie ausmachst)", FlagDefs.Select(f => f.label).Concat(new[] { "Sofort bauen" }).ToArray());
+            Section("Dauer-Schalter (bleiben an, bis du sie ausmachst)", FlagDefs.Select(f => f.label).Concat(new[] { "Sofort bauen", "Sofort herstellen" }).ToArray());
             if (Match("Sofort bauen"))
             {
                 bool now = GUILayout.Toggle(InstantBuild, " Sofort bauen  (jede Baustelle wird gleich fertig, nur in diesem Spiel)");
                 if (now != InstantBuild)
                     Run("instant " + (now ? "1" : "0"));
+            }
+            if (Match("Sofort herstellen"))
+            {
+                bool now = GUILayout.Toggle(InstantMake, " Sofort herstellen  (Trupp-Ausbildung, Fahrzeuge aus der Werkstatt, Produktion; nur in diesem Spiel)");
+                if (now != InstantMake)
+                    Run("instantmake " + (now ? "1" : "0"));
             }
             foreach (var f in FlagDefs)
             {
@@ -1089,6 +1293,56 @@ namespace IfzCoop
                 Btn("Unsterblich an", "immortal 1 " + ids);
                 Btn("Unsterblich aus", "immortal 0 " + ids);
                 GUILayout.EndHorizontal();
+
+                var groups = SquadsById(_selIds).ToList();
+                // Fähigkeiten: Klick schaltet um (an, wenn noch nicht alle sie haben, sonst aus)
+                if (SkillDefs.Any(sd => Match(sd.label)) || Match("Fähigkeiten"))
+                {
+                    if (!Searching) GUILayout.Label("Fähigkeiten (Klick = an/aus für alle im Trupp):", _hint);
+                    var shownSkills = SkillDefs.Where(sd => Match(sd.label) || Match("Fähigkeiten")).ToArray();
+                    for (int i = 0; i < shownSkills.Length; i += 4)
+                    {
+                        GUILayout.BeginHorizontal();
+                        for (int j = i; j < i + 4 && j < shownSkills.Length; j++)
+                        {
+                            var (sid, slabel) = shownSkills[j];
+                            var (on, all) = SkillCount(groups, sid);
+                            bool full = all > 0 && on == all;
+                            string text = slabel + "\n" + (full ? "✔ alle" : on > 0 ? $"{on}/{all}" : "–");
+                            string tip = full ? slabel + " entfernen" : slabel + " allen im Trupp geben";
+                            if (IconButton(SkillIcon(sid, groups), text, tip, 140f))
+                                Run($"sqskill {ids} {(int)sid} {(full ? 0 : 1)}");
+                        }
+                        GUILayout.EndHorizontal();
+                    }
+                }
+                // Waffen und Schutzkleidung für alle im Trupp
+                var weapons = Weapons.Where(x => HasResData(x.id) && Match(x.label)).ToArray();
+                if (weapons.Length > 0)
+                {
+                    if (!Searching) GUILayout.Label("Waffe für alle im Trupp:", _hint);
+                    for (int i = 0; i < weapons.Length; i += 4)
+                    {
+                        GUILayout.BeginHorizontal();
+                        for (int j = i; j < i + 4 && j < weapons.Length; j++)
+                            if (IconButton(ResIcon(weapons[j].id), weapons[j].label, weapons[j].label + " allen im Trupp in die Hand geben", 140f))
+                                Run($"sqweapon {ids} {(int)weapons[j].id}");
+                        GUILayout.EndHorizontal();
+                    }
+                }
+                var armor = Armor.Where(x => HasResData(x.id) && Match(x.label)).ToArray();
+                if (armor.Length > 0)
+                {
+                    if (!Searching) GUILayout.Label("Schutzkleidung für alle im Trupp:", _hint);
+                    for (int i = 0; i < armor.Length; i += 4)
+                    {
+                        GUILayout.BeginHorizontal();
+                        for (int j = i; j < i + 4 && j < armor.Length; j++)
+                            if (IconButton(ResIcon(armor[j].id), armor[j].label, armor[j].label + " allen im Trupp anziehen", 140f))
+                                Run($"sqgear {ids} {(int)armor[j].id}");
+                        GUILayout.EndHorizontal();
+                    }
+                }
             }
             if (!IsGuest && Immortal.Count > 0)
             {
@@ -1104,7 +1358,7 @@ namespace IfzCoop
 
         private void DrawVehicles()
         {
-            Section("Ausgewähltes Fahrzeug", "Reparieren und volltanken", "Umbauen", "Panzerung", "Turbo", "Schweres MG", "Panzerkanone", "Kofferraum", "Tank", "Rammschutz");
+            Section("Ausgewähltes Fahrzeug", "Reparieren und volltanken", "Unzerstörbar", "Umbauen", "Panzerung", "Turbo", "Schweres MG", "Panzerkanone", "Kofferraum", "Tank", "Rammschutz");
             var v = FindVehicle(_selVehicle);
             if (!Searching)
                 GUILayout.Label(v == null
@@ -1112,7 +1366,19 @@ namespace IfzCoop
                     : "Ausgewählt: " + VehicleLabel(v.Data.GetVehicleType()) + "  (" + _selVehicle + ")");
             if (v != null)
             {
+                GUILayout.BeginHorizontal();
                 Btn("Reparieren und volltanken", "vfix " + v.Id);
+                bool hard = Indestructible.Contains(v.Id);
+                if (Match("Unzerstörbar"))
+                {
+                    if (!IsGuest) Btn(hard ? "Unzerstörbar: AN (Klick = aus)" : "Unzerstörbar machen", "vhard " + v.Id + (hard ? " 0" : " 1"));
+                    else
+                    {
+                        Btn("Unzerstörbar an", "vhard " + v.Id + " 1");
+                        Btn("aus", "vhard " + v.Id + " 0");
+                    }
+                }
+                GUILayout.EndHorizontal();
                 if (!Searching) GUILayout.Label("Umbauen (wie in der Werkstatt, sofort und kostenlos):", _hint);
                 int col = 0;
                 GUILayout.BeginHorizontal();

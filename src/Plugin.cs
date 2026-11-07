@@ -12,7 +12,7 @@ namespace IfzCoop
     {
         public const string Guid = "de.ifzcoop";
         public const string Name = "IFZ Koop";
-        public const string Version = "0.23.12";
+        public const string Version = "0.23.13";
 
         internal static Plugin Instance;
         internal static ManualLogSource Log;
@@ -199,6 +199,8 @@ namespace IfzCoop
                     // gilt nur für das laufende Spiel
                     if (CheatWindow.Immortal.Count > 0) CheatWindow.Immortal.Clear();
                     CheatWindow.InstantBuild = false;
+                    CheatWindow.InstantMake = false;
+                    if (CheatWindow.Indestructible.Count > 0) CheatWindow.Indestructible.Clear();
                 }
                 CheckStockOnce();
                 Menu.NoticeUi.Update();

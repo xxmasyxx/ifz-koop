@@ -363,6 +363,8 @@ namespace IfzCoop
             catch (Exception e) { Plugin.Log.LogWarning("IFZCOOP StoragePanel-Schutz nicht gesetzt: " + e.Message); }
             // Entwickler-Menü: unsterbliche Trupps (CheatWindow.Immortal) bekommen keinen Lebenspunkt abgezogen
             TryPatch(harmony, typeof(Character), "SubtractHp", nameof(ImmortalPrefix));
+            // Entwickler-Menü: unzerstörbare Fahrzeuge (CheatWindow.Indestructible), nur das gewählte Fahrzeug
+            TryPatch(harmony, typeof(Vehicle), "SubtractHp", nameof(VehicleHpPrefix));
             TryPatch(harmony, typeof(SquadsCreator), "ReplenishGroup", nameof(LocalSquadCreationPrefix));
             // Prefix, nicht Postfix: danach ist die Figur schon aus ihrem Trupp und gilt weder als Soldat noch Arbeiter.
             TryPatch(harmony, typeof(Character), "DestroyCharacter", nameof(DestroyCharacterPrefix));
@@ -457,6 +459,13 @@ namespace IfzCoop
             var s = CurrentSession;
             if (s != null && s.Role != Role.Guest && !UnitSync.NetApplying)
                 s.Stats?.AddForActor(Sync.StatsSync.Stat.Squads);
+        }
+
+        // Vehicle.SubtractHp(float amount, SubtractionHpReason deathReason, Weapon weapon)
+        private static bool VehicleHpPrefix(Vehicle __instance)
+        {
+            return CheatWindow.Indestructible.Count == 0 || __instance == null || string.IsNullOrEmpty(__instance.Id)
+                   || !CheatWindow.Indestructible.Contains(__instance.Id);
         }
 
         public static int StorageErrorsCaught;

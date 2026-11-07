@@ -66,6 +66,10 @@ Entwickler-Menue (F7)
   - Fuer den Host und im Einzelspiel. Gaeste nur, wenn der Host unter "Mehrspieler"
     "Gaeste: Entwickler-Menue" auf "An" stellt (der Host fuehrt ihre Klicks aus).
   - Reiter: Schalter | Lager & Waffen | Basis & Bewohner | Forschung | Trupps & Kampf | Fahrzeuge | Welt & Zeit.
+  - Schalter "Sofort bauen" und "Sofort herstellen" (Trupp-Ausbildung, Werkstatt, Produktion) gelten nur
+    im laufenden Spiel.
+  - Ausgewaehlte Trupps: Faehigkeiten an/aus, Waffe und Schutzkleidung fuer alle im Trupp.
+  - Ausgewaehltes Fahrzeug: unzerstoerbar an/aus (nur dieses Fahrzeug).
   - Ausgewaehlt (erst im Spiel anklicken, dann F7): Trupps heilen / unsterblich, Gebaeude reparieren /
     fertig bauen / pluendern / abreissen, Fahrzeug reparieren + volltanken und umbauen (Panzerung, Turbo,
     Schweres MG, Panzerkanone, Kofferraum, Tank, Rammschutz - nur was zum Fahrzeug passt).
