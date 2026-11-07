@@ -170,6 +170,22 @@ namespace IfzCoop.Versus
                 case "leave":
                     vs.Leave("Testbefehl");
                     return "verlassen";
+
+                case "ally":
+                    vs.Diplomacy.Request(byte.Parse(a[2], inv), 0);
+                    return vs.Diplomacy.Compact();
+
+                case "allyend":
+                    vs.Diplomacy.Request(byte.Parse(a[2], inv), 1);
+                    return vs.Diplomacy.Compact();
+
+                case "allyanswer":
+                    vs.Diplomacy.Answer(byte.Parse(a[2], inv), a.Length > 3 && a[3] == "1");
+                    return vs.Diplomacy.Compact();
+
+                case "allyui":
+                    VsDiplomacyUi.OpenFor(int.Parse(a[2], inv));
+                    return "Fenster für Platz " + a[2];
             }
             return "unbekannt: vs " + sub;
         }

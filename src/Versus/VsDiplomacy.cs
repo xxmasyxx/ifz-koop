@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -291,6 +291,9 @@ namespace IfzCoop.Versus
                 var b = buildings[i];
                 var work = b != null ? b.ScavengeWork : null;
                 if (work == null || !work.IsDone || _remote.ContainsKey(b.ID) || _mineReported.Contains(b.ID))
+                    continue;
+                // eigenes HQ nie melden: sonst stünde bei den anderen genau dort ein „geplündertes“ Haus (HQ-Wahl ist geheim)
+                if (b.IsHq)
                     continue;
                 _mineReported.Add(b.ID);
                 (fresh ?? (fresh = new List<long>())).Add(b.ID);

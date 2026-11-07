@@ -505,6 +505,9 @@ namespace IfzCoop.Menu
             }
             string role = s == null ? "" : s.Role == Role.Host ? "Du bist Host" : s.Role == Role.Guest ? "Du bist Gast" : "Allein";
             role = (LobbySettings.Mode == "versus" ? "Versus" : "Koop") + " · " + role;
+            var vsr = Versus.VersusSession.Instance;
+            if (Versus.VersusSession.Active)
+                role = "Versus · " + (vsr.Role == Versus.VsRole.Host ? "Du bist Host" : "Du bist Gast") + (_inGame ? " · Klick auf einen Spieler = Bündnis" : "");
             string status = s?.Status;
             _info.text = $"Mehrspieler · {members.Count} von {Slots} · {role}" + (string.IsNullOrEmpty(status) || s.Role == Role.None ? "" : " · " + status);
             bool guest = s != null && s.Role == Role.Guest;

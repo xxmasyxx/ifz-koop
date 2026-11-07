@@ -1,4 +1,4 @@
-using IfzCoop.Game;
+﻿using IfzCoop.Game;
 using UnityEngine;
 
 namespace IfzCoop.Versus
@@ -14,7 +14,7 @@ namespace IfzCoop.Versus
         private static int _target = -1;
         private static Rect _playerRect = new Rect(0f, 0f, 360f, 10f);
         private static Rect _askRect = new Rect(0f, 70f, 440f, 10f);
-        private static GUIStyle _text;
+        private static GUIStyle _text, _box;
 
         private static VersusSession Vs => VersusSession.Instance;
 
@@ -38,14 +38,26 @@ namespace IfzCoop.Versus
                 return;
             }
             if (_text == null)
+            {
                 _text = new GUIStyle(GUI.skin.label) { fontSize = 15, wordWrap = true, richText = true };
+                _text.normal.textColor = Color.white;
+                // deckend und dunkel wie das Statistik-Fenster (sonst schimmern Karte und Symbole durch)
+                var bg = new Texture2D(1, 1);
+                bg.SetPixel(0, 0, new Color(0.07f, 0.09f, 0.10f, 1f));
+                bg.Apply();
+                _box = new GUIStyle(GUI.skin.window) { padding = new RectOffset(14, 14, 32, 12), fontSize = 16, fontStyle = FontStyle.Bold };
+                _box.normal.background = bg;
+                _box.onNormal.background = bg;
+                _box.normal.textColor = new Color(0.29f, 0.99f, 0.49f);
+                _box.onNormal.textColor = _box.normal.textColor;
+            }
 
             if (_target >= 0)
             {
                 if (Vs.Roster.BySlot(_target) == null) _target = -1;
                 else
                 {
-                    _playerRect = GUILayout.Window(PlayerWindowId, _playerRect, DrawPlayer, "Spieler", GUILayout.Width(360f));
+                    _playerRect = GUILayout.Window(PlayerWindowId, _playerRect, DrawPlayer, "BÜNDNIS", _box, GUILayout.Width(360f));
                     Menu.ModUi.Report(PlayerWindowId, _playerRect);
                 }
             }
@@ -54,7 +66,7 @@ namespace IfzCoop.Versus
             if (asks.Count > 0)
             {
                 _askRect.x = (Screen.width - _askRect.width) / 2f;
-                _askRect = GUILayout.Window(AskWindowId, _askRect, DrawAsk, "Bündnis-Anfrage", GUILayout.Width(440f));
+                _askRect = GUILayout.Window(AskWindowId, _askRect, DrawAsk, "BÜNDNIS-ANFRAGE", _box, GUILayout.Width(440f));
                 Menu.ModUi.Report(AskWindowId, _askRect);
             }
         }
