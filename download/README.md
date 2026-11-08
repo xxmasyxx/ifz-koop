@@ -2,8 +2,8 @@
 
 Falls der Loader oder die Release-Seite nicht lädt (GitHub-Fehler 504), hier direkt:
 
-- **IfzCoop-0.26.4.zip** – normale Version
-- **IfzCoop-0.27.4-BETA.zip** – Beta (Versus-Neuheiten ungetestet, plus Werkstatt- und Download-Fix)
+- **IfzCoop-0.26.5.zip** – normale Version
+- **IfzCoop-0.27.5-BETA.zip** – Beta (Versus-Neuheiten ungetestet, plus Werkstatt- und Download-Fix)
 
 Zip entpacken, `IfzCoop-Installer.bat` starten. Alle Spieler brauchen dieselbe Version.
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -128,16 +128,44 @@ namespace IfzCoop.Sync
             if (works == null)
                 return list;
             var count = new Dictionary<string, int>();
-            foreach (var w in works)
+            // Erst die Arbeiten, die ihr Bauwerk wirklich benutzt, dann verwaiste Doppel (z. B. zweite Wach-Arbeit eines
+            // Turms beim Gast): sonst bekäme das Doppel den Schlüssel und Wichtigkeit/Klicks gingen an die falsche Arbeit.
+            for (int pass = 0; pass < 2; pass++)
             {
-                if (w == null)
-                    continue;
-                string k = BaseKey(w);
-                count.TryGetValue(k, out int n);
-                count[k] = n + 1;
-                list.Add(new KeyValuePair<string, WorkBase>(n == 0 ? k : k + "#" + n, w));
+                foreach (var w in works)
+                {
+                    if (w == null || IsOrphan(w) != (pass == 1))
+                        continue;
+                    string k = BaseKey(w);
+                    count.TryGetValue(k, out int n);
+                    count[k] = n + 1;
+                    list.Add(new KeyValuePair<string, WorkBase>(n == 0 ? k : k + "#" + n, w));
+                }
             }
             return list;
+        }
+
+        /// <summary>Wach-Arbeit, die ihr Turm/Tor nicht (mehr) benutzt: Doppel aus einem zweiten „fertig“-Zustand.</summary>
+        private static bool IsOrphan(WorkBase w)
+        {
+            if (!(w is Gameplay.Units.Workers.WorkSystem.Works.DefenseWork))
+                return false;
+            try
+            {
+                var s = w.GetRelatedStructure();
+                return s != null && s.DefenseWork != null && !ReferenceEquals(s.DefenseWork, w);
+            }
+            catch { return false; }
+        }
+
+        public static int OrphanCount()
+        {
+            int n = 0;
+            var works = Wc?.Works;
+            if (works != null)
+                foreach (var w in works)
+                    if (w != null && IsOrphan(w)) n++;
+            return n;
         }
 
         /// <summary>Für den Testtreiber: Arbeit Nummer i in der Reihenfolge der Statuszeilen.</summary>
