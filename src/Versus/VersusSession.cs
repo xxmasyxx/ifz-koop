@@ -895,6 +895,8 @@ namespace IfzCoop.Versus
             if (hasColor)
                 wish = new Color32(r.ReadByte(), r.ReadByte(), r.ReadByte(), 255);
             r.ReadString(); // Spiel-ID beim Fortsetzen (V12)
+            if (modVersion != Plugin.Version) VersionBanner.Mismatch("g:" + name, Plugin.Version, modVersion, "Gast " + name);
+            else VersionBanner.Match("g:" + name);
 
             string reason = null;
             int slot = peer != null ? peer.Slot : Roster.FreeSlot(Settings.MaxPlayers);
@@ -911,7 +913,7 @@ namespace IfzCoop.Versus
 
             if (reason != null)
             {
-                _transport.Send(from, VsNet.Build(Msg.VsWelcome, w => { w.Write(false); w.Write(reason); w.Write((byte)0); w.Write(0UL); }));
+                _transport.Send(from, VsNet.Build(Msg.VsWelcome, w => { w.Write(false); w.Write(reason); w.Write((byte)0); w.Write(0UL); w.Write(Plugin.Version); }));
                 Plugin.Log.LogWarning($"IFZVS Gast {name} abgelehnt: {reason}");
                 return;
             }
@@ -925,7 +927,7 @@ namespace IfzCoop.Versus
             peer.Welcomed = true;
             peer.LastHeard = Time.realtimeSinceStartup;
             Roster.Add(peer.Slot, from.m_SteamID, name, wish);
-            _transport.Send(from, VsNet.Build(Msg.VsWelcome, w => { w.Write(true); w.Write(string.Empty); w.Write(peer.Slot); w.Write(from.m_SteamID); }));
+            _transport.Send(from, VsNet.Build(Msg.VsWelcome, w => { w.Write(true); w.Write(string.Empty); w.Write(peer.Slot); w.Write(from.m_SteamID); w.Write(Plugin.Version); }));
             _transport.Send(from, BuildSettings());
             _rosterSig = null;
             Status = $"{name} ist in der Lobby (Platz {peer.Slot + 1})";
@@ -981,6 +983,7 @@ namespace IfzCoop.Versus
                 SteamMatchmaking.LeaveLobby(lobby);
                 string modver = SteamMatchmaking.GetLobbyData(lobby, "modver");
                 Status = $"Versus-Version passt nicht (Host {modver}, du {Plugin.Version})";
+                if (!string.IsNullOrEmpty(modver)) VersionBanner.Mismatch("host", modver, Plugin.Version, "Du");
                 Notice(Status, 10f);
                 return true;
             }
@@ -1069,6 +1072,12 @@ namespace IfzCoop.Versus
                     string reason = r.ReadString();
                     byte slot = r.ReadByte();
                     ulong assigned = r.ReadUInt64();
+                    if (r.BaseStream.Position < r.BaseStream.Length)
+                    {
+                        string hostVer = r.ReadString();
+                        if (hostVer != Plugin.Version) VersionBanner.Mismatch("host", hostVer, Plugin.Version, "Du");
+                        else VersionBanner.Match("host");
+                    }
                     if (!accepted)
                     {
                         Leave("Host lehnt ab: " + reason, sendBye: false);

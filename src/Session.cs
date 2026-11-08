@@ -955,6 +955,8 @@ namespace IfzCoop
                 string modVersion = r.ReadString();
                 string gameVersion = r.ReadString();
                 string name = r.ReadString();
+                if (modVersion != Plugin.Version) VersionBanner.Mismatch("g:" + name, Plugin.Version, modVersion, "Gast " + name);
+                else VersionBanner.Match("g:" + name);
                 string reason = null;
                 if (!IsLobbyMember(from))
                     reason = "nicht in der Lobby";
@@ -965,7 +967,7 @@ namespace IfzCoop
 
                 if (reason != null)
                 {
-                    _transport.Send(from, Protocol.Build(Msg.Welcome, w => { w.Write(false); w.Write(reason); w.Write(0UL); }));
+                    _transport.Send(from, Protocol.Build(Msg.Welcome, w => { w.Write(false); w.Write(reason); w.Write(0UL); w.Write(Plugin.Version); }));
                     Plugin.Log.LogWarning($"Gast {name} abgelehnt: {reason}");
                     return;
                 }
@@ -981,7 +983,7 @@ namespace IfzCoop
                 // schon Spielgeschehen geschickt, und Tempo-Änderungen in dieser Zeit gingen verloren.
                 peer.AwaitingLoad = true;
                 peer.LastHeard = Time.realtimeSinceStartup;
-                _transport.Send(from, Protocol.Build(Msg.Welcome, w => { w.Write(true); w.Write(string.Empty); w.Write(from.m_SteamID); }));
+                _transport.Send(from, Protocol.Build(Msg.Welcome, w => { w.Write(true); w.Write(string.Empty); w.Write(from.m_SteamID); w.Write(Plugin.Version); }));
                 Plugin.Log.LogInfo($"IFZCOOP guest joined: {name} ({from.m_SteamID})" + (GameAccess.IsGameStarted ? "" : " – wartet im Hauptmenü"));
                 if (!GameAccess.IsGameStarted)
                 {
@@ -1376,6 +1378,7 @@ namespace IfzCoop
             {
                 SteamMatchmaking.LeaveLobby(lobby);
                 string modver = SteamMatchmaking.GetLobbyData(lobby, "modver");
+                if (!string.IsNullOrEmpty(modver)) VersionBanner.Mismatch("host", modver, Plugin.Version, "Du");
                 Reset(string.IsNullOrEmpty(modver) ? "Das ist keine IFZ-Koop-Lobby" : $"Mod-Version passt nicht (Host {modver}, du {Plugin.Version})");
                 return;
             }
@@ -1400,6 +1403,13 @@ namespace IfzCoop
                     bool accepted = r.ReadBoolean();
                     string reason = r.ReadString();
                     ulong assignedId = r.ReadUInt64();
+                    // ab 0.26.4 schickt der Host seine Mod-Version mit (ältere Hosts nicht)
+                    if (r.BaseStream.Position < r.BaseStream.Length)
+                    {
+                        string hostVer = r.ReadString();
+                        if (hostVer != Plugin.Version) VersionBanner.Mismatch("host", hostVer, Plugin.Version, "Du");
+                        else VersionBanner.Match("host");
+                    }
                     if (!accepted)
                     {
                         Leave("Host lehnt ab: " + reason, sendBye: false);
