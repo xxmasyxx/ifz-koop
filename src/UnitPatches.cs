@@ -240,6 +240,7 @@ namespace IfzCoop
             // Siedlungen würfelt nur der Host, umziehen kann nur der Host, Statistik vom Host (ZoneSync)
             ZoneSync.ApplyPatches(harmony);
             WarningSync.ApplyPatches(harmony);
+            TowerWeaponSync.ApplyPatches(harmony);
             // Häuser Teil 2 (BuildingSync): Abbrechen/Anhalten/Fortsetzen, Sprengstoff, Beanspruchen, Abbau, eigene Gebäude
             // und Teilen des Gastes gehen an den Host; der Gast teilt nur auf Ansage des Hosts
             TryPatch(harmony, typeof(UI.InfoPanels.StructureInProgressPanelInfo), "OnCancelButtonClicked", nameof(BldPanelCancel));

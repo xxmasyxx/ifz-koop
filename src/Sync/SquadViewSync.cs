@@ -760,6 +760,13 @@ namespace IfzCoop.Sync
                 }
             }
 
+            if (v.Status == PlayerGroupStatus.Scavenging)
+            {
+                var sc = g.GetOccupiedScavengable();
+                if (sc != null)
+                    KeepScavengePercent(g, sc.GetScavengeProgress());
+            }
+
             // Fortschrittsbalken am Schild wie ScavengeHandler.Execute
             var pointer = g.Pointer;
             if (pointer == null)
@@ -1193,6 +1200,36 @@ namespace IfzCoop.Sync
             if (b != null && b.Squad != null && b != a)
                 list.Add(b);
             return list;
+        }
+
+        private static readonly AccessTools.FieldRef<UI.InfoPanels.SquadPanelInfo, string> ScavTextField =
+            AccessTools.FieldRefAccess<UI.InfoPanels.SquadPanelInfo, string>("_scavengingText");
+
+        /// <summary>
+        /// Gast: „Plündern: x %“ im Trupp-Fenster festhalten. Das Spiel baut die Zeile bei jedem Zustandswechsel neu (nur
+        /// „Plündern“) und setzt die Zahl erst beim nächsten Fortschritts-Signal – beim Gast kommt das selten, die Zahl
+        /// verschwand zeitweise (Bericht 2026-11-08). Text wie SquadPanelInfo.UpdateScavengeProgress.
+        /// </summary>
+        private void KeepScavengePercent(Group g, float progress)
+        {
+            try
+            {
+                foreach (var panel in OpenSquadPanels())
+                {
+                    if (panel.Squad != g)
+                        continue;
+                    var header = HeaderField(panel);
+                    var box = header != null ? WarningsField(header) : null;
+                    var w = box != null ? box.GetWarning("Code.SquadStatus.") : null;
+                    string label = ScavTextField(panel);
+                    if (w == null || string.IsNullOrEmpty(label))
+                        continue;
+                    string text = $"{label}: {progress * 100f:0.0}%";
+                    if (w.Text != text)
+                        w.SetWarningText(text);
+                }
+            }
+            catch (Exception e) { Plugin.Log.LogDebug("Plündern-Prozent: " + e.Message); }
         }
 
         private string LastText(ulong last)

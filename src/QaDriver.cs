@@ -1320,6 +1320,7 @@ namespace IfzCoop
                     sb.AppendLine(line);
                 Sync.ScavengeSync.Count(out int scavDone, out int scavStarted);
                 sb.AppendLine($"scavenged={scavDone} scavengeStarted={scavStarted} scavengeApplied={s.Scavenge.Applied}");
+                sb.AppendLine(s.TowerWeapons.Compact());
                 int revealed = 0;
                 var hideoutList = GameAccess.Game<Gameplay.Units.Enemy.Hideouts.HideoutsController>()?.Hideouts;
                 if (hideoutList != null)

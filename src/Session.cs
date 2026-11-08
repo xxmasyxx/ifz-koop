@@ -134,6 +134,7 @@ namespace IfzCoop
         public AreaWorkSync AreaWorks { get; }
         public ProductionSync Production { get; }
         public WarningSync Warnings { get; }
+        public TowerWeaponSync TowerWeapons { get; }
         public StorySync Story { get; }
         public StructureSync Structures { get; }
         public SquadActionSync SquadActions { get; }
@@ -318,6 +319,7 @@ namespace IfzCoop
             AreaWorks = new AreaWorkSync(this);
             Production = new ProductionSync(this);
             Warnings = new WarningSync(this);
+            TowerWeapons = new TowerWeaponSync(this);
             Story = new StorySync(this);
             Structures = new StructureSync(this);
             SquadActions = new SquadActionSync(this);
@@ -561,6 +563,7 @@ namespace IfzCoop
                 WorkerPos.GuestFrame();
                 Production.GuestFrame();
                 Warnings.GuestFrame();
+                TowerWeapons.GuestFrame();
                 Story.GuestFrame();
                 SquadActions.GuestFrame();
                 Zones.GuestFrame();
@@ -651,6 +654,7 @@ namespace IfzCoop
             AreaWorks.HostUpdate();
             Production.HostUpdate();
             Warnings.HostUpdate();
+            TowerWeapons.HostUpdate();
             Story.HostUpdate();
             Structures.HostUpdate();
             SquadActions.HostUpdate();
@@ -1019,6 +1023,7 @@ namespace IfzCoop
                         Containers.ResendAll();
                         Ground.ResendAll();
                         Warnings.ResendAll();
+                        TowerWeapons.ResendAll();
                         Vehicles.ResendAll();
                         Events.ResendAll();
                         World.ResendAll();
@@ -1100,6 +1105,11 @@ namespace IfzCoop
                 case Msg.WorkRequest:
                     if (!peer.AwaitingLoad)
                         Works.HostOnRequest(peer, r);
+                    break;
+
+                case Msg.TowerWeapon:
+                    if (!peer.AwaitingLoad)
+                        TowerWeapons.HostOnRequest(peer, r);
                     break;
 
                 case Msg.TraderRequest:
@@ -1626,6 +1636,11 @@ namespace IfzCoop
                         Warnings.GuestOnState(r);
                     break;
 
+                case Msg.TowerWeapon:
+                    if (GuestState == GuestState.InGame)
+                        TowerWeapons.GuestOnState(r);
+                    break;
+
                 case Msg.GroupSide:
                     if (GuestState == GuestState.InGame)
                         Story.GuestOnSides(r);
@@ -1991,6 +2006,7 @@ namespace IfzCoop
             Menu.LobbyInfo.Reset();
             Scavenge.Reset();
             Warnings.Reset();
+            TowerWeapons.Reset();
             Hideouts.Reset();
             Stock.Reset();
             Containers.Reset();
