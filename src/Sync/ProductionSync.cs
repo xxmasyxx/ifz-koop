@@ -362,9 +362,60 @@ namespace IfzCoop.Sync
 
         // ================================================================ Host
 
+        private readonly Dictionary<long, float> _noGarageSince = new Dictionary<long, float>();
+        private float _nextGarageCheck;
+
+        /// <summary>
+        /// Host: Werkstatt ohne Garage (vom Gast gebaut, Garage nie angekommen) bekommt nach 20 s eine gewürfelte Garage.
+        /// Ohne Garage speichert das Spiel die Aufträge der Werkstatt nicht (SerializedBuildingWithGarage) und liefert
+        /// keine Autos aus. Die 20 s lassen dem Gast Zeit, seine eigene Garage zu schicken.
+        /// </summary>
+        private void EnsureGarages(float now)
+        {
+            if (now < _nextGarageCheck)
+                return;
+            _nextGarageCheck = now + 5f;
+            foreach (var b in ShopBuildings())
+            {
+                if (b.CarWorkshopWork == null)
+                    continue;
+                var g = GarageF(b);
+                if (g == null || g.HasGarage)
+                {
+                    _noGarageSince.Remove(b.ID);
+                    continue;
+                }
+                if (!_noGarageSince.TryGetValue(b.ID, out var since))
+                {
+                    _noGarageSince[b.ID] = now;
+                    continue;
+                }
+                if (now - since < 20f)
+                    continue;
+                _noGarageSince[b.ID] = now + 100f; // nächster Versuch frühestens in 2 Minuten
+                try { b.TryGenerateRandomGarage(); } catch (Exception e) { Plugin.Log.LogDebug("Garage würfeln: " + e.Message); }
+                if (g.HasGarage)
+                {
+                    g.TryStartOrder();
+                    GaragesPlaced++;
+                    _noGarageSince.Remove(b.ID);
+                    Plugin.Log.LogInfo($"IFZCOOP Werkstatt {b.ID}: Garage fehlte, neu angelegt");
+                }
+                else
+                {
+                    Plugin.Log.LogWarning($"IFZCOOP Werkstatt {b.ID}: keine Garage und kein freier Platz für eine");
+                }
+            }
+        }
+
         public void HostUpdate()
         {
             float now = Time.realtimeSinceStartup;
+            if (GameAccess.IsGameStarted)
+            {
+                try { EnsureGarages(now); }
+                catch (Exception e) { Plugin.Log.LogDebug("Werkstatt-Garagen: " + e.Message); }
+            }
             if (now < _nextSend || _session.ActiveGuestCount == 0 || !GameAccess.IsGameStarted)
                 return;
             _nextSend = now + SendInterval;
