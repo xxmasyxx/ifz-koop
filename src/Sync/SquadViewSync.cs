@@ -147,8 +147,24 @@ namespace IfzCoop.Sync
         private readonly Dictionary<Component, Color> _tintedLabels = new Dictionary<Component, Color>();
         private readonly Dictionary<Pointer, Group> _dotPointers = new Dictionary<Pointer, Group>();
         private readonly HashSet<Component> _dotLabels = new HashSet<Component>();
-        // Host: wer den Trupp zuletzt gesteuert hat (ausgewählt oder Befehl gegeben)
-        private readonly Dictionary<string, ulong> _last = new Dictionary<string, ulong>();
+        // Host: wer den Trupp zuletzt gesteuert hat (ausgewählt oder Befehl gegeben). Statisch und ohne Leeren bei Reset:
+        // gehört zum Spiel, nicht zur Sitzung – bleibt beim Trennen stehen und kommt über SaveExtras in den Spielstand
+        // (Bericht 2026-11-08: nach dem Laden waren die Punkte weg). Geleert nur beim Start eines (anderen) Spiels.
+        private static readonly Dictionary<string, ulong> _last = new Dictionary<string, ulong>();
+
+        /// <summary>Für den Spielstand (SaveExtras): Trupp-ID → Steam-ID dessen, der zuletzt etwas geändert hat.</summary>
+        public static Dictionary<string, ulong> ExportLast() => new Dictionary<string, ulong>(_last);
+
+        /// <summary>Aus dem Spielstand (SaveExtras) oder leer beim Start eines Spiels.</summary>
+        public static void ImportLast(Dictionary<string, ulong> from)
+        {
+            _last.Clear();
+            if (from != null)
+                foreach (var kv in from)
+                    if (!string.IsNullOrEmpty(kv.Key) && kv.Value != 0UL) _last[kv.Key] = kv.Value;
+        }
+
+        public static int LastCount => _last.Count;
         private readonly List<Component> _labels = new List<Component>();
         private readonly List<OrderLine> _lineBuffer = new List<OrderLine>();
 
@@ -189,7 +205,6 @@ namespace IfzCoop.Sync
             _tintedLabels.Clear();
             _dotPointers.Clear();
             _dotLabels.Clear();
-            _last.Clear();
             _infoPanel = null;
             _labels.Clear();
             Drawing = false;
@@ -202,7 +217,7 @@ namespace IfzCoop.Sync
         {
             if (!HostActive)
             {
-                if (_tinted.Count > 0 || _dotPointers.Count > 0 || _chains.Count > 0 || _ctrl.Count > 0 || _last.Count > 0)
+                if (_tinted.Count > 0 || _dotPointers.Count > 0 || _chains.Count > 0 || _ctrl.Count > 0)
                     Reset();
                 return;
             }

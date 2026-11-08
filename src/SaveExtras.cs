@@ -33,6 +33,7 @@ namespace IfzCoop
             public List<long> IndestructibleBuildings = new List<long>();
             public Dictionary<string, float[]> Stats = new Dictionary<string, float[]>();
             public Dictionary<string, string> StatNames = new Dictionary<string, string>();
+            public Dictionary<string, ulong> SquadLastBy = new Dictionary<string, ulong>(); // Punkte „zuletzt gesteuert“
         }
 
         private static string _pendingLoadDir;
@@ -100,6 +101,7 @@ namespace IfzCoop
                 SpeedBoost = new Dictionary<string, float>(CheatWindow.SpeedBoost),
                 IndestructibleVehicles = CheatWindow.Indestructible.ToList(),
                 IndestructibleBuildings = CheatWindow.IndestructibleBuildings.Keys.ToList(),
+                SquadLastBy = Sync.SquadViewSync.ExportLast(),
             };
             if (s.Stats != null)
             {
@@ -122,6 +124,7 @@ namespace IfzCoop
             {
                 _wasStarted = true;
                 _loadAt = Time.realtimeSinceStartup + 3f; // erst wenn Trupps, Fahrzeuge, Gebäude da sind
+                Sync.SquadViewSync.ImportLast(null); // neues/anderes Spiel: alte Punkte weg (Spielstand füllt sie gleich wieder)
                 return;
             }
             if (_pendingLoadDir == null || Time.realtimeSinceStartup < _loadAt)
@@ -171,6 +174,8 @@ namespace IfzCoop
                         try { v.UpdateMaxSpeed(); } catch { }
             if (s.Stats != null && d.Stats != null && d.Stats.Count > 0)
                 s.Stats.Import(d.Stats, d.StatNames);
+            if (d.SquadLastBy != null && d.SquadLastBy.Count > 0)
+                Sync.SquadViewSync.ImportLast(d.SquadLastBy);
             Loaded++;
             Plugin.Log.LogInfo("IFZCOOP Spielstand-Zusatz geladen: " + path);
         }
