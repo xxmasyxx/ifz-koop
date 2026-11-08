@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -80,10 +80,18 @@ namespace IfzCoop.Updater
                 ? cfg.Url.TrimEnd('/') + "/" // nur zum Testen: eigener Server statt GitHub
                 : "https://github.com/" + cfg.Repo + "/releases/latest/download/";
             string verFile = Path.Combine(CacheDir, "ifzcoop-version.txt");
+            _repo = string.IsNullOrEmpty(cfg.Url) ? cfg.Repo : null;
+            _apiAssets = null;
             if (!Download(baseUrl + "version.txt", verFile, 8))
             {
-                _log.LogInfo("Keine Verbindung zu GitHub, starte mit " + local + ".");
-                return;
+                // GitHub gab zeitweise 504 auf releases/latest/download – dann über die API (die lief weiter)
+                string api = ApiAsset("version.txt");
+                if (api == null || !Download(api, verFile, 15, Octet))
+                {
+                    _log.LogInfo("Keine Verbindung zu GitHub, starte mit " + local + ".");
+                    return;
+                }
+                _log.LogInfo("GitHub-Downloads gestört, lade über die GitHub-API.");
             }
             var remote = ParseKeyValues(File.ReadAllText(verFile));
             File.Delete(verFile);
@@ -142,7 +150,13 @@ namespace IfzCoop.Updater
                 return null;
             }
             string tmp = Path.Combine(CacheDir, name + ".download");
-            if (!Download(baseUrl + name, tmp, 60))
+            bool ok = Download(baseUrl + name, tmp, 60);
+            if (!ok)
+            {
+                string api = ApiAsset(name);
+                ok = api != null && Download(api, tmp, 60, Octet);
+            }
+            if (!ok)
             {
                 _log.LogWarning("Download von " + name + " fehlgeschlagen.");
                 return null;
@@ -237,7 +251,36 @@ namespace IfzCoop.Updater
         /// <summary>
         /// Lädt mit dem curl von Windows (TLS über Windows, unabhängig von Mono). Fallback: WebClient.
         /// </summary>
-        private static bool Download(string url, string outFile, int maxSeconds)
+        private const string Octet = "application/octet-stream";
+        private static string _repo;
+        private static Dictionary<string, string> _apiAssets;
+
+        /// <summary>API-Adresse einer Datei des neuesten Releases (null = unbekannt oder kein GitHub).</summary>
+        private static string ApiAsset(string name)
+        {
+            if (string.IsNullOrEmpty(_repo))
+                return null;
+            if (_apiAssets == null)
+            {
+                _apiAssets = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                string json = Path.Combine(CacheDir, "ifzcoop-latest.json");
+                try
+                {
+                    if (Download("https://api.github.com/repos/" + _repo + "/releases/latest", json, 10))
+                    {
+                        // Datei-Einträge: "url": ".../releases/assets/123", ... "name": "..." (vor dem verschachtelten "uploader")
+                        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(json),
+                                     "\"url\"\\s*:\\s*\"(https://api\\.github\\.com/repos/[^\"]+/releases/assets/\\d+)\"[^{}]*?\"name\"\\s*:\\s*\"([^\"]+)\""))
+                            _apiAssets[m.Groups[2].Value] = m.Groups[1].Value;
+                    }
+                }
+                catch (Exception e) { _log.LogInfo("GitHub-API: " + e.Message); }
+                try { if (File.Exists(json)) File.Delete(json); } catch { }
+            }
+            return _apiAssets.TryGetValue(name, out var u) ? u : null;
+        }
+
+        private static bool Download(string url, string outFile, int maxSeconds, string accept = null)
         {
             if (File.Exists(outFile)) File.Delete(outFile);
             string root = Environment.GetEnvironmentVariable("SystemRoot") ?? @"C:\Windows";
@@ -247,7 +290,7 @@ namespace IfzCoop.Updater
                 try
                 {
                     var psi = new ProcessStartInfo(curl,
-                        "-sSfL --connect-timeout 4 --max-time " + maxSeconds + " -A IfzCoop-Updater -o \"" + outFile + "\" \"" + url + "\"")
+                        "-sSfL --connect-timeout 4 --max-time " + maxSeconds + " -A IfzCoop-Updater" + (accept != null ? " -H \"Accept: " + accept + "\"" : "") + " -o \"" + outFile + "\" \"" + url + "\"")
                     {
                         UseShellExecute = false,
                         CreateNoWindow = true,
@@ -277,6 +320,7 @@ namespace IfzCoop.Updater
                 using (var wc = new WebClient())
                 {
                     wc.Headers[HttpRequestHeader.UserAgent] = "IfzCoop-Updater";
+                    if (accept != null) wc.Headers[HttpRequestHeader.Accept] = accept;
                     wc.DownloadFile(url, outFile);
                 }
                 return File.Exists(outFile) && new FileInfo(outFile).Length > 0;

@@ -1,0 +1,5 @@
+is_global = true
+build_property.RootNamespace = IfzCoop.Updater
+build_property.ProjectDir = C:\IFZ-Koop-Umzug\ifz-coop\updater\
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 

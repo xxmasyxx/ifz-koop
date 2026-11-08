@@ -1,0 +1,11 @@
+C:\IFZ-Koop-Umzug\ifz-coop\updater\obj\Release\IfzCoop.Updater.csproj.AssemblyReference.cache
+C:\IFZ-Koop-Umzug\ifz-coop\updater\obj\Release\IfzCoop.Updater.GeneratedMSBuildEditorConfig.editorconfig
+C:\IFZ-Koop-Umzug\ifz-coop\updater\obj\Release\IfzCoop.Updater.AssemblyInfoInputs.cache
+C:\IFZ-Koop-Umzug\ifz-coop\updater\obj\Release\IfzCoop.Updater.AssemblyInfo.cs
+C:\IFZ-Koop-Umzug\ifz-coop\updater\obj\Release\IfzCoop.Updater.csproj.CoreCompileInputs.cache
+C:\IFZ-Koop-Umzug\ifz-coop\updater\bin\Release\IfzCoop.Updater.deps.json
+C:\IFZ-Koop-Umzug\ifz-coop\updater\bin\Release\IfzCoop.Updater.dll
+C:\IFZ-Koop-Umzug\ifz-coop\updater\bin\Release\IfzCoop.Updater.pdb
+C:\IFZ-Koop-Umzug\ifz-coop\updater\obj\Release\IfzCoop.Updater.dll
+C:\IFZ-Koop-Umzug\ifz-coop\updater\obj\Release\IfzCoop.Updater.pdb
+C:\IFZ-Koop-Umzug\ifz-coop\updater\obj\Release\IfzCoop.Updater.sourcelink.json

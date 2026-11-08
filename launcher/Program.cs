@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -133,6 +133,62 @@ namespace IfzCoop.Launcher
             using (var wc = Client()) wc.DownloadFile(url, file);
         }
 
+        /// <summary>Tag -> (Dateiname -> API-Adresse der Datei). Kommt aus der Release-Liste.</summary>
+        private static readonly Dictionary<string, Dictionary<string, string>> _apiAssets =
+            new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Release-Datei laden: erst der normale Link, bei Fehler (GitHub gab zeitweise 504 auf releases/download)
+        /// über die API-Adresse der Datei (Accept: application/octet-stream).
+        /// </summary>
+        public static void DownloadAsset(string tag, string name, string file)
+        {
+            try { Download(AssetUrl(tag, name), file); return; }
+            catch (WebException) when (ApiUrl(tag, name) != null) { }
+            using (var wc = Client())
+            {
+                wc.Headers[HttpRequestHeader.Accept] = "application/octet-stream";
+                wc.DownloadFile(ApiUrl(tag, name), file);
+            }
+        }
+
+        public static string GetAssetString(string tag, string name)
+        {
+            try { return GetString(AssetUrl(tag, name)); }
+            catch (WebException) when (ApiUrl(tag, name) != null) { }
+            using (var wc = Client())
+            {
+                wc.Headers[HttpRequestHeader.Accept] = "application/octet-stream";
+                return wc.DownloadString(ApiUrl(tag, name));
+            }
+        }
+
+        private static string ApiUrl(string tag, string name)
+        {
+            if (!_apiAssets.ContainsKey(tag))
+            {
+                // Release noch nicht gelesen: einzeln von der API holen
+                try
+                {
+                    var d = new JavaScriptSerializer().DeserializeObject(GetString("https://api.github.com/repos/" + Repo + "/releases/tags/" + tag)) as Dictionary<string, object>;
+                    if (d != null) RememberAssets(tag, d);
+                }
+                catch { _apiAssets[tag] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); }
+            }
+            return _apiAssets.TryGetValue(tag, out var m) && m.TryGetValue(name, out var u) ? u : null;
+        }
+
+        private static void RememberAssets(string tag, Dictionary<string, object> release)
+        {
+            var m = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (release.TryGetValue("assets", out var assets) && assets is object[] aa)
+                foreach (var a in aa)
+                    if (a is Dictionary<string, object> ad && ad.TryGetValue("name", out var n) && n is string ns
+                        && ad.TryGetValue("url", out var u) && u is string us)
+                        m[ns] = us;
+            _apiAssets[tag] = m;
+        }
+
         /// <summary>Alle Releases mit version.txt (ab 0.23.1), neueste zuerst.</summary>
         public static List<Release> Releases()
         {
@@ -146,6 +202,7 @@ namespace IfzCoop.Launcher
                 if (d.TryGetValue("draft", out var dr) && dr is bool isDraft && isDraft) continue;
                 string tag = d.TryGetValue("tag_name", out var t) ? t as string : null;
                 if (string.IsNullOrEmpty(tag) || !Version.TryParse(tag.TrimStart('v', 'V'), out var ver)) continue;
+                RememberAssets(tag, d);
                 bool hasVersionTxt = false;
                 if (d.TryGetValue("assets", out var assets) && assets is object[] aa)
                     foreach (var a in aa)
@@ -171,7 +228,7 @@ namespace IfzCoop.Launcher
         public static Dictionary<string, string> VersionTxt(string tag)
         {
             var d = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var raw in GetString(AssetUrl(tag, "version.txt")).Split('\n'))
+            foreach (var raw in GetAssetString(tag, "version.txt").Split('\n'))
             {
                 int i = raw.IndexOf('=');
                 if (i > 0) d[raw.Substring(0, i).Trim()] = raw.Substring(i + 1).Trim();
@@ -714,7 +771,7 @@ namespace IfzCoop.Launcher
             string tmp = Path.Combine(Path.GetTempPath(), "IfzCoop-Launcher-Installer");
             Directory.CreateDirectory(tmp);
             string bat = Path.Combine(tmp, "IfzCoop-Installer.bat");
-            GitHub.Download(GitHub.AssetUrl(r.Tag, "IfzCoop-Installer.bat"), bat);
+            GitHub.DownloadAsset(r.Tag, "IfzCoop-Installer.bat", bat);
             var psi = new ProcessStartInfo("cmd.exe", "/c \"\"" + bat + "\" install -Yes " + (force ? "-Force " : "") + "-GameDir \"" + _dir + "\"\"")
             {
                 UseShellExecute = false,
@@ -740,7 +797,7 @@ namespace IfzCoop.Launcher
                 if (!vt.TryGetValue(name, out var want)) return null;
                 string f = Path.Combine(tmp, name);
                 if (File.Exists(f)) File.Delete(f);
-                GitHub.Download(GitHub.AssetUrl(r.Tag, name), f);
+                GitHub.DownloadAsset(r.Tag, name, f);
                 if (!string.Equals(Game.Sha256(f), want, StringComparison.OrdinalIgnoreCase))
                     throw new Exception(name + ": Prüfsumme falsch, nichts installiert");
                 return f;
