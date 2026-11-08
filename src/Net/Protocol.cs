@@ -107,6 +107,7 @@ namespace IfzCoop.Net
         SquadActionEvent = 76,  // Host -> Gast: Art (byte) 1 Teilen bereit, 2 Mitglied verschoben, 3 getauscht, 4 Trupp leer, 5 Erfahrung/Fähigkeiten je Figur
         ZoneState = 77,         // Host -> Gast: Siedlung (Art, aufgedeckt, übernommen, n × (Kennung, Typ, Bauplan, Zustand, gefunden, Versteck, Versteck-JSON))
         ZoneStats = 78,         // Host -> Gast: Statistik (Tote Infizierte/Banditen/eigene, Einwanderer, gesammelt, gefunden)
+        WarningState = 86,      // Host -> Gast: n × (byte Art, bool aktiv, byte Stufe, string Zusatztext) – gelbe Warnungen oben rechts
         ZoneMove = 79,          // Host -> Gast: byte Phase (1 Umzug angekündigt, 2 Host verlässt die Karte, 3 Host wieder im Spiel), string Text
         BuildingHealth = 72,    // Host -> Gast: n × (long id, float HP, float Max-HP, byte Flags (beansprucht, Abbau/Rückbau angehalten), int Sprengladungen)
         BuildingEvent = 73,     // Host -> Gast: byte Op: 1 eigenes Gebäude (long Zähler, Eckpunkte, Höhe, Dach, Fassade, Farben) | 2 Teilung beginnt (long id, string JSON) | 3 Teilung fertig (long id, long Zähler)

@@ -133,6 +133,7 @@ namespace IfzCoop
         public WorkerPosSync WorkerPos { get; }
         public AreaWorkSync AreaWorks { get; }
         public ProductionSync Production { get; }
+        public WarningSync Warnings { get; }
         public StorySync Story { get; }
         public StructureSync Structures { get; }
         public SquadActionSync SquadActions { get; }
@@ -316,6 +317,7 @@ namespace IfzCoop
             WorkerPos = new WorkerPosSync(this);
             AreaWorks = new AreaWorkSync(this);
             Production = new ProductionSync(this);
+            Warnings = new WarningSync(this);
             Story = new StorySync(this);
             Structures = new StructureSync(this);
             SquadActions = new SquadActionSync(this);
@@ -558,6 +560,7 @@ namespace IfzCoop
                 Traders.GuestFrame();
                 WorkerPos.GuestFrame();
                 Production.GuestFrame();
+                Warnings.GuestFrame();
                 Story.GuestFrame();
                 SquadActions.GuestFrame();
                 Zones.GuestFrame();
@@ -647,6 +650,7 @@ namespace IfzCoop
             WorkerPos.HostUpdate();
             AreaWorks.HostUpdate();
             Production.HostUpdate();
+            Warnings.HostUpdate();
             Story.HostUpdate();
             Structures.HostUpdate();
             SquadActions.HostUpdate();
@@ -1014,6 +1018,7 @@ namespace IfzCoop
                         Stock.ResendAll();
                         Containers.ResendAll();
                         Ground.ResendAll();
+                        Warnings.ResendAll();
                         Vehicles.ResendAll();
                         Events.ResendAll();
                         World.ResendAll();
@@ -1616,6 +1621,11 @@ namespace IfzCoop
                         Production.GuestOnState(r);
                     break;
 
+                case Msg.WarningState:
+                    if (GuestState == GuestState.InGame)
+                        Warnings.GuestOnState(r);
+                    break;
+
                 case Msg.GroupSide:
                     if (GuestState == GuestState.InGame)
                         Story.GuestOnSides(r);
@@ -1980,6 +1990,7 @@ namespace IfzCoop
             _waitingForGame.Clear();
             Menu.LobbyInfo.Reset();
             Scavenge.Reset();
+            Warnings.Reset();
             Hideouts.Reset();
             Stock.Reset();
             Containers.Reset();
