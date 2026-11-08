@@ -1302,7 +1302,7 @@ namespace IfzCoop
                 foreach (var line in Sync.SquadStateSync.StatusLines())
                     sb.AppendLine(line);
                 sb.AppendLine($"squadStateApplied={s.SquadStates.Applied} enteredApplied={s.SquadStates.EnteredApplied} requestsSent={s.SquadStates.RequestsSent}");
-                sb.AppendLine(Sync.PopulationSync.StatusLine() + $" created={s.Population.Created} removed={s.Population.Removed} sickChanged={s.Population.SickChanged}");
+                sb.AppendLine(Sync.PopulationSync.StatusLine() + $" created={s.Population.Created} removed={s.Population.Removed} sickChanged={s.Population.SickChanged} workerListFixed={s.Population.WorkerListFixed} workersCount={Gameplay.Units.Player.Workers.WorkersController.WorkersCount}");
                 sb.AppendLine(Sync.BuildingSync.StatusLine() + $" buildingsApplied={s.Buildings.Applied} requestsSent={s.Buildings.RequestsSent} requestsDone={s.Buildings.RequestsDone}");
                 foreach (var line in Sync.BuildingSync.DetailLines())
                     sb.AppendLine(line);

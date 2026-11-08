@@ -216,12 +216,41 @@ namespace IfzCoop.Sync
                         c.CureSickness();
                         SickChanged++;
                     }
+                    // Arbeiterliste wie beim Host: Kranke heraus (SicknessController.GetSick → RemoveWorker), Gesunde hinein
+                    // (Heilung → AddWorker). Character.GetSick/CureSickness allein tun das nicht – beim Gast zählten Kranke
+                    // als Arbeiter (Bericht 2026-11-08: Arbeitslose 0/244 beim Host, 0/252 beim Gast bei 8 Kranken).
+                    FixWorkerList(wc, c, kv.Value);
                 }
             }
             finally
             {
                 UnitSync.NetApplying = false;
             }
+        }
+
+        public int WorkerListFixed { get; private set; }
+
+        private void FixWorkerList(WorkersController wc, Character c, Kind hostKind)
+        {
+            try
+            {
+                bool listed = false;
+                var list = wc.Workers;
+                for (int i = 0; i < list.Count; i++)
+                    if (ReferenceEquals(list[i], c)) { listed = true; break; }
+                if (listed && (hostKind != Kind.Worker || c.IsSick || c.IsChild))
+                {
+                    c.WorkModule?.UnassignWork(areaWork: true);
+                    wc.RemoveWorker(c);
+                    WorkerListFixed++;
+                }
+                else if (!listed && hostKind == Kind.Worker && !c.IsSick && !c.IsChild && c.Group == null && !c.IsDead())
+                {
+                    wc.AddWorker(c);
+                    WorkerListFixed++;
+                }
+            }
+            catch (Exception e) { Plugin.Log.LogDebug($"Arbeiterliste {c?.Id}: {e.Message}"); }
         }
 
         /// <summary>Doppelte Figur ohne Tod (kein Grab, keine Stimmung) aus Listen und Welt nehmen.</summary>
