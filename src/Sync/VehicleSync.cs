@@ -61,6 +61,7 @@ namespace IfzCoop.Sync
 
         public int Applied { get; private set; }
         public int Created { get; private set; }
+        public int FuelApplied { get; private set; }
         public int Adopted { get; private set; }
         public int Removed { get; private set; }
         public int Entered { get; private set; }
@@ -98,6 +99,12 @@ namespace IfzCoop.Sync
 
         private static string R(float f, float step) => Mathf.RoundToInt(f / step).ToString(CultureInfo.InvariantCulture);
 
+        private static float FuelFraction(Vehicle v)
+        {
+            float max = v.Fuel.FuelTank.MaxQuantity;
+            return max > 0f ? v.Fuel.FuelTank.Quantity / max : 0f;
+        }
+
         private static string LookSignature(Vehicle v)
         {
             var p = v.VehiclePainter;
@@ -117,7 +124,9 @@ namespace IfzCoop.Sync
               .Append('|').Append(v.IsWaiting).Append(v.IsDiscovered).Append(v.IsDiscoveredWithRvoice).Append(v.UnderCarWorkshop)
               .Append(v.AutoDriveState).Append(v.DriveOffRoad).Append(v.EquipmentLockHandler.IsLocked)
               .Append('|').Append(R(v.Health.Hp, 1f))
-              .Append('|').Append(R(v.Fuel.FuelTank.Quantity, 0.01f))
+              // Tankinhalt ist intern winzig (voller Pickup-Tank < 0,005), darum in Prozent vom Tank plus leer/nicht leer
+              // (Bericht 2026-11-09: Host-Tank leer, Gast hatte noch Sprit – Schritte von 0,01 kamen nie zustande).
+              .Append('|').Append(R(FuelFraction(v), 0.01f)).Append(v.Fuel.IsEmpty ? 'E' : 'F')
               .Append('|').Append(R(v.AmmoContainer.AmmoCrate.Quantity, 0.02f))
               .Append('|').Append(R(v.ProgressOfTakingVehicle, 0.05f))
               .Append('|').Append(R(v.CurrentAmmoCapacity, 0.01f))
@@ -157,7 +166,15 @@ namespace IfzCoop.Sync
             foreach (var id in gone) _sentSig.Remove(id);
 
             bool sendIds = now >= _nextIdList;
-            if (sendIds) _nextIdList = now + IdListInterval;
+            if (sendIds)
+            {
+                _nextIdList = now + IdListInterval;
+                // Trupp-Fahrzeuge regelmäßig ganz: der Gast rechnet Verbrauch/Auftanken selbst und kann abweichen,
+                // ohne dass sich beim Host etwas ändert
+                foreach (var v in vehicles)
+                    if (v != null && !string.IsNullOrEmpty(v.Id) && v.Owner != null && !upserts.Contains(v))
+                        upserts.Add(v);
+            }
             if (upserts.Count == 0 && gone.Count == 0 && !sendIds)
                 return;
             Broadcast(upserts, gone, sendIds ? seen.ToList() : null);
@@ -370,8 +387,14 @@ namespace IfzCoop.Sync
             v.DriveOffRoad = s.DriveOffRoad;
             if (Mathf.Abs(v.Health.Hp - s.Hp) > 0.01f)
                 v.Health.SetHp(s.Hp);
-            if (Mathf.Abs(v.Fuel.FuelTank.Quantity - s.Fuel) > 0.0005f)
-                v.Fuel.SetFuel(s.Fuel); // gleicher Wert wie FuelTank.Quantity beim Host
+            // gleicher Wert wie FuelTank.Quantity beim Host; Toleranz relativ zum Tank (die Werte sind sehr klein)
+            float fuelTol = Mathf.Max(v.Fuel.FuelTank.MaxQuantity * 0.002f, 1e-9f);
+            bool hostEmpty = s.Fuel <= 0f;
+            if (Mathf.Abs(v.Fuel.FuelTank.Quantity - s.Fuel) > fuelTol || hostEmpty != v.Fuel.IsEmpty)
+            {
+                v.Fuel.SetFuel(hostEmpty ? 0f : s.Fuel);
+                FuelApplied++;
+            }
             if (Mathf.Abs(v.AmmoContainer.AmmoCrate.Quantity - s.Ammo) > 0.0005f)
                 v.AmmoContainer.SetAmmo(s.Ammo);
             if (v.EquipmentLockHandler.IsLocked != s.IsEquipmentLocked)
@@ -509,7 +532,7 @@ namespace IfzCoop.Sync
             {
                 string mods = string.Join(",", v.ModificationHandler.ModificationsDict.Keys.Select(m => m.ToString()).OrderBy(x => x));
                 yield return $"vehicle {v.Id} {v.Data.GetVehicleType()} state={v.VehicleState} owner={(v.Owner != null ? v.Owner.Id : "-")} in={OccupantOf(v)} "
-                    + $"hp={v.Health.Hp.ToString("0", inv)} fuel={v.Fuel.FuelTank.Quantity.ToString("0.00", inv)} ammo={v.AmmoContainer.AmmoCrate.Quantity.ToString("0.00", inv)} "
+                    + $"hp={v.Health.Hp.ToString("0", inv)} fuel={(FuelFraction(v) * 100f).ToString("0", inv)}% ammo={v.AmmoContainer.AmmoCrate.Quantity.ToString("0.00", inv)} "
                     + $"disc={(v.IsDiscovered ? 1 : 0)} mods={mods} pos={v.Position.x.ToString("0", inv)},{v.Position.z.ToString("0", inv)}";
             }
         }

@@ -1308,7 +1308,7 @@ namespace IfzCoop
                     sb.AppendLine(line);
                 sb.AppendLine($"worldApplied research={s.World.ResearchApplied} laws={s.World.LawsApplied} mood={s.World.MoodApplied} weather={s.World.WeatherApplied} requestsSent={s.World.RequestsSent} requestsDone={s.World.RequestsDone}");
                 sb.AppendLine($"eventsApplied={s.Events.Applied} missionsStarted={s.Events.MissionsStarted} missionsEnded={s.Events.MissionsEnded} objectivesDone={s.Events.ObjectivesDone} markersSpawned={s.Events.MarkersSpawned} markersRemoved={s.Events.MarkersRemoved} contentChanged={s.Events.ContentChanged}");
-                sb.AppendLine($"vehiclesApplied={s.Vehicles.Applied} created={s.Vehicles.Created} adopted={s.Vehicles.Adopted} removed={s.Vehicles.Removed} entered={s.Vehicles.Entered} exited={s.Vehicles.Exited}");
+                sb.AppendLine($"vehiclesApplied={s.Vehicles.Applied} created={s.Vehicles.Created} fuelApplied={s.Vehicles.FuelApplied} adopted={s.Vehicles.Adopted} removed={s.Vehicles.Removed} entered={s.Vehicles.Entered} exited={s.Vehicles.Exited}");
                 sb.AppendLine(Sync.ContainerSync.BuildingsStatus() + $" containersApplied={s.Containers.ContainersApplied} itemsApplied={s.Containers.ItemsApplied} housesCleared={s.Containers.BuildingsCleared}");
                 sb.AppendLine($"cheat guestAllowed={(CheatWindow.GuestAllowedByHost ? 1 : 0)} hostAllows={(Plugin.GuestCheats.Value ? 1 : 0)} guestRequests={CheatWindow.Instance?.GuestRequests ?? 0}");
                 sb.AppendLine(Menu.MenuLobbyUi.StatusLine());
