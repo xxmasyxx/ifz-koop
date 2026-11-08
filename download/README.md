@@ -1,10 +1,10 @@
-﻿# IFZ Koop â€“ Download
+﻿# IFZ Koop – Download
 
-Falls der Loader oder die Release-Seite nicht lÃ¤dt (GitHub-Fehler 504), hier direkt:
+Falls der Loader oder die Release-Seite nicht lädt (GitHub-Fehler 504), hier direkt:
 
-- **IfzCoop-0.27.9.zip** â€“ aktuelle Version (auch Ã¼ber Auto-Update; alle Fixes aus 0.26.7 plus Versus-Neuheiten)
-- **IfzCoop-0.26.7.zip** â€“ alte Linie ohne die neuen Versus-Sachen
+- **IfzCoop-0.27.9.zip** – aktuelle Version (auch über Auto-Update; alle Fixes aus 0.26.7 plus Versus-Neuheiten)
+- **IfzCoop-0.26.7.zip** – alte Linie ohne die neuen Versus-Sachen
 
 Zip entpacken, `IfzCoop-Installer.bat` starten. Alle Spieler brauchen dieselbe Version.
 
-**Loader meldet â€ž(504) Gatewaytimeoutâ€œ?** Neuen Loader laden: `IfzCoop-Launcher.exe` (ab 0.26.2 mit Ersatzweg Ã¼ber die GitHub-API).
+**Loader meldet „(504) Gatewaytimeout“?** Neuen Loader laden: `IfzCoop-Launcher.exe` (ab 0.26.2 mit Ersatzweg über die GitHub-API).
