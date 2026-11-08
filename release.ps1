@@ -6,7 +6,8 @@ param(
     [Parameter(Mandatory = $true)][string]$GameDir,
     [string]$Notes = '',
     [string]$TestGameDir = 'C:\IFZ-Test',
-    [switch]$Draft
+    [switch]$Draft,
+    [switch]$Prerelease
 )
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
@@ -47,6 +48,8 @@ $notesFile = Join-Path $out 'notes.md'
 [IO.File]::WriteAllText($notesFile, $(if ($Notes) { $Notes } else { "IFZ Koop $ver" }), (New-Object Text.UTF8Encoding $false))
 $ghArgs = @('release', 'create', "v$ver") + $assets + @('--title', "IFZ Koop $ver", '--notes-file', $notesFile)
 if ($Draft) { $ghArgs += '--draft' }
+# Beta: GitHub-Vorabversion, zaehlt nicht als 'latest' (kein Auto-Update), im Loader waehlbar
+if ($Prerelease) { $ghArgs += '--prerelease'; $ghArgs[$ghArgs.IndexOf("IFZ Koop $ver")] = "IFZ Koop $ver (Beta)" }
 Push-Location $root
 try { & $gh @ghArgs; if ($LASTEXITCODE -ne 0) { throw 'gh release create fehlgeschlagen' } }
 finally { Pop-Location }

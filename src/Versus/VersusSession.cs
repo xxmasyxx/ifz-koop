@@ -138,6 +138,7 @@ namespace IfzCoop.Versus
         public VsVote Vote { get; }
         public VsDiplomacy Diplomacy { get; }
         public VsUnits Units { get; }
+        public VsBuildings Buildings { get; }
 
         public IEnumerable<VsPeer> Peers => _peers.Values;
         public double HostRttMs => _hostRttMs;
@@ -159,6 +160,7 @@ namespace IfzCoop.Versus
             Vote = new VsVote(this);
             Diplomacy = new VsDiplomacy(this);
             Units = new VsUnits(this);
+            Buildings = new VsBuildings(this);
             Settings.MaxPlayers = Mathf.Clamp(Plugin.MaxPlayers?.Value ?? 4, 2, VsProtocol.MaxPlayers);
             Instance = this;
         }
@@ -220,6 +222,8 @@ namespace IfzCoop.Versus
                 catch (Exception e) { Plugin.Log.LogDebug("IFZVS Bündnisse: " + e.Message); }
                 try { Units.Update(now); }
                 catch (Exception e) { Plugin.Log.LogDebug("IFZVS fremde Trupps: " + e.Message); }
+                try { Buildings.Update(now); }
+                catch (Exception e) { Plugin.Log.LogDebug("IFZVS fremde Gebäude: " + e.Message); }
             }
         }
 
@@ -846,6 +850,12 @@ namespace IfzCoop.Versus
                 case Msg.VsHit:
                     Units.HostOnHit(peer, r);
                     break;
+                case Msg.VsBuildings:
+                    Buildings.HostOnList(peer, r);
+                    break;
+                case Msg.VsBuildingHit:
+                    Buildings.HostOnHit(peer, r);
+                    break;
                 case Msg.VsHqChosen:
                     Start.HostOnHqChosen(peer, r);
                     break;
@@ -1159,6 +1169,12 @@ namespace IfzCoop.Versus
                 case Msg.VsHit:
                     Units.GuestOnHit(r);
                     break;
+                case Msg.VsBuildings:
+                    Buildings.GuestOnList(r);
+                    break;
+                case Msg.VsBuildingHit:
+                    Buildings.GuestOnHit(r);
+                    break;
                 case Msg.Notice:
                     Notice(r.ReadString());
                     break;
@@ -1381,6 +1397,7 @@ namespace IfzCoop.Versus
             Vote.Reset();
             Diplomacy.Reset();
             Units.Reset();
+            Buildings.Reset();
             Status = status;
         }
 

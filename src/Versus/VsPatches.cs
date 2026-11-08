@@ -99,6 +99,17 @@ namespace IfzCoop.Versus
             Gameplay.Units.Interfaces.IAreaDamageApplier areaDamageApplier)
             => VsUnits.VehicleAreaDamagePrefix(__instance, ref totalDamage, damageOrigin, radius, areaDamageApplier);
 
+        private static void CanAttackBuildingPostfix(Gameplay.Buildings.Building building, ref bool __result)
+            => VsBuildings.CanAttackPostfix(building, ref __result);
+
+        private static bool StructureDamagePrefix(Gameplay.Rebuilding.Structure __instance, Gameplay.Units.Equipment.Weapon attackedWith, float dmg,
+            Gameplay.Units.Interfaces.IDamageApplier damageApplier, ref bool __result)
+            => VsBuildings.ReceiveDamagePrefix(__instance, attackedWith, dmg, damageApplier, ref __result);
+
+        private static bool BuildingAreaPrefix(Gameplay.Buildings.Building __instance, ref float totalDamage, UnityEngine.Vector3 damageOrigin, float radius,
+            Gameplay.Units.Interfaces.IAreaDamageApplier areaDamageApplier)
+            => VsBuildings.AreaDamagePrefix(__instance, ref totalDamage, damageOrigin, radius, areaDamageApplier);
+
         private static void IsEnemyPostfix(Gameplay.Units.EnemiesProvider __instance, object[] __args, ref bool __result)
             => VsUnits.IsEnemyPostfix(__instance, __args, ref __result);
 
@@ -131,6 +142,10 @@ namespace IfzCoop.Versus
             TryPatch(harmony, typeof(Gameplay.Vehicles.Vehicle), "ApplyAreaDamage", nameof(ProxyVehicleAreaPrefix), null);
             // je Trupp: andere Spieler angreifen an/aus
             TryPatch(harmony, typeof(Gameplay.Units.EnemiesProvider), "IsEnemy", null, nameof(IsEnemyPostfix));
+            // fremde Gebäude (VsBuildings): angreifbar, Treffer an den Besitzer
+            TryPatch(harmony, typeof(Utilities.BuildingExtensions), "CanAttackBuilding", null, nameof(CanAttackBuildingPostfix));
+            TryPatch(harmony, typeof(Gameplay.Rebuilding.Structure), "ReceiveDamage", nameof(StructureDamagePrefix), null);
+            TryPatch(harmony, typeof(Gameplay.Buildings.Building), "ApplyAreaDamage", nameof(BuildingAreaPrefix), null);
             // fremde Autos lassen sich nicht übernehmen
             TryPatch(harmony, typeof(Gameplay.Units.Movements.GroupMovement), "MoveTo", nameof(ProxyImmigrantPrefix), null);
             TryPatch(harmony, typeof(Gameplay.Units.VehicleHandler), "AssignVehicle", nameof(ProxyImmigrantPrefix), null);

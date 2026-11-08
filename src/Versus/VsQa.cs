@@ -206,6 +206,24 @@ namespace IfzCoop.Versus
                     return n + " Trupps: Spieler angreifen " + (on ? "an" : "aus");
                 }
 
+                case "attackhq":
+                {
+                    // vs attackhq: alle eigenen Trupps greifen das erste fremde HQ an
+                    long id = vs.Buildings.ForeignHqId();
+                    var b = id != 0 ? GameAccess.Game<BuildingsController>()?.GetBuildingById(id) : null;
+                    if (b == null) return "kein fremdes HQ bekannt";
+                    int n = 0;
+                    var squads = GameAccess.Game<Gameplay.Units.SquadsController>()?.Squads;
+                    if (squads != null)
+                        foreach (var g in squads)
+                            if (g != null && g.Fraction == Gameplay.Units.Fraction.Player && !VsUnits.IsProxy(g) && !g.IsEmpty())
+                            {
+                                g.OrdersHandlers.GiveOrder(new Gameplay.Units.Orders.AttackBuildingOrder(b), clearOrders: true, overrideClearByShifting: true);
+                                n++;
+                            }
+                    return n + " Trupps greifen HQ " + id + " an (angreifbar=" + VsBuildings.IsAttackableForeign(b) + ")";
+                }
+
                 case "squadui":
                     return VsSquadButton.Compact();
 
@@ -233,6 +251,7 @@ namespace IfzCoop.Versus
             yield return "vs.players=" + vs.Roster.Compact();
             yield return "vs.diplomacy " + vs.Diplomacy.Compact();
             yield return "vs.units " + vs.Units.Compact();
+            yield return "vs.buildings " + vs.Buildings.Compact();
 
             var st = vs.Start;
             var hq = HqController.MainHeadquarter;
