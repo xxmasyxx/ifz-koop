@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -91,7 +91,11 @@ namespace IfzCoop.Menu
 
         public static void Draw()
         {
-            if (!Visible) return;
+            if (!Visible)
+            {
+                ReleaseUi(); // Sicherheitsnetz: nie eine abgeschaltete Oberfläche zurücklassen
+                return;
+            }
             if (!GameAccess_IsGameStarted())
             {
                 Close();
@@ -114,6 +118,13 @@ namespace IfzCoop.Menu
             // (Spaltenbreite hängt an der Fensterbreite → Rückkopplung, Fenster wuchs endlos).
             var r = GUILayout.Window(WindowId, _rect, DrawWindow, "STATISTIK", _box, GUILayout.Width(_width), GUILayout.MaxWidth(_width));
             _rect = new Rect(r.x, r.y, _width, r.height);
+            // Mit „Schließen“ im Fenster zugemacht: nicht danach noch die Oberfläche abschalten (sonst blieb sie aus,
+            // weil Draw bei unsichtbarem Fenster nicht mehr lief – nichts mehr klickbar, Bericht 2026-11-08)
+            if (!Visible)
+            {
+                ReleaseUi();
+                return;
+            }
             ModUi.Report(WindowId, _rect);
 
             // Klicks über dem Fenster nicht an die Spiel-Oberfläche durchreichen
