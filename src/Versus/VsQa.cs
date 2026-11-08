@@ -193,6 +193,22 @@ namespace IfzCoop.Versus
                     return sb.ToString();
                 }
 
+                case "attack":
+                {
+                    // vs attack <Trupp-ID|all> on|off
+                    bool on = a.Length < 4 || a[3] != "off";
+                    int n = 0;
+                    var squads = GameAccess.Game<Gameplay.Units.SquadsController>()?.Squads;
+                    if (squads != null)
+                        foreach (var g in squads)
+                            if (g != null && g.Fraction == Gameplay.Units.Fraction.Player && !VsUnits.IsProxy(g) && (a[2] == "all" || g.Id == a[2]))
+                            { VsUnits.SetAttacksPlayers(g, on); n++; }
+                    return n + " Trupps: Spieler angreifen " + (on ? "an" : "aus");
+                }
+
+                case "squadui":
+                    return VsSquadButton.Compact();
+
                 case "allyui":
                     VsDiplomacyUi.OpenFor(int.Parse(a[2], inv));
                     return "Fenster für Platz " + a[2];

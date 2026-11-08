@@ -95,6 +95,13 @@ namespace IfzCoop.Versus
 
         private static bool ProxyVehicleDamagePrefix(Gameplay.Vehicles.Vehicle __instance) => VsUnits.VehicleDamagePrefix(__instance);
 
+        private static bool ProxyVehicleAreaPrefix(Gameplay.Vehicles.Vehicle __instance, ref float totalDamage, UnityEngine.Vector3 damageOrigin, float radius,
+            Gameplay.Units.Interfaces.IAreaDamageApplier areaDamageApplier)
+            => VsUnits.VehicleAreaDamagePrefix(__instance, ref totalDamage, damageOrigin, radius, areaDamageApplier);
+
+        private static void IsEnemyPostfix(Gameplay.Units.EnemiesProvider __instance, object[] __args, ref bool __result)
+            => VsUnits.IsEnemyPostfix(__instance, __args, ref __result);
+
         private static bool ProxyDamagePrefix(Gameplay.Units.Characters.Character __instance) => VsUnits.DamagePrefix(__instance);
 
         private static void LatLonHqPostfix(ref Gameplay.Buildings.Building __result)
@@ -121,6 +128,9 @@ namespace IfzCoop.Versus
             // Stellvertreter (Einwanderer-Vorlage) nie als Einwanderer behandeln: kein Funkspruch, nicht aufnehmen/ablehnen
             TryPatch(harmony, typeof(Gameplay.Units.Characters.Character), "ReceiveDamage", nameof(ProxyReceiveDamagePrefix), null);
             TryPatch(harmony, typeof(Gameplay.Vehicles.Vehicle), "SubtractHp", nameof(ProxyVehicleDamagePrefix), null);
+            TryPatch(harmony, typeof(Gameplay.Vehicles.Vehicle), "ApplyAreaDamage", nameof(ProxyVehicleAreaPrefix), null);
+            // je Trupp: andere Spieler angreifen an/aus
+            TryPatch(harmony, typeof(Gameplay.Units.EnemiesProvider), "IsEnemy", null, nameof(IsEnemyPostfix));
             // fremde Autos lassen sich nicht übernehmen
             TryPatch(harmony, typeof(Gameplay.Units.Movements.GroupMovement), "MoveTo", nameof(ProxyImmigrantPrefix), null);
             TryPatch(harmony, typeof(Gameplay.Units.VehicleHandler), "AssignVehicle", nameof(ProxyImmigrantPrefix), null);
