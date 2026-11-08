@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Reflection;
 using Controllers;
 using Controllers.Time;
@@ -27,6 +27,52 @@ namespace IfzCoop
         /// <summary>true, solange ein vom Host empfangenes Tempo angewendet wird.</summary>
         internal static bool ApplyingRemote;
 
+        private static float _nextGarageTry, _nextGarageNotice;
+        private static readonly AccessTools.FieldRef<Gameplay.Buildings.Building, Gameplay.Buildings.GarageHandler> GarageRef =
+            AccessTools.FieldRefAccess<Gameplay.Buildings.Building, Gameplay.Buildings.GarageHandler>("GarageHandler");
+
+        /// <summary>
+        /// Prefix CarWorkshopController.HandleRequestCompleted: hat die Werkstatt keine Garage, eine würfeln (wie das Spiel bei
+        /// Schnellbau); klappt das nicht, Auftrag liegen lassen (er bleibt fertig und wird ausgeliefert, sobald es eine Garage
+        /// gibt – die schickt beim Koop der Gast, der die Werkstatt gebaut hat).
+        /// </summary>
+        private static bool CarDoneWithoutGaragePrefix(Gameplay.Research.CarWorkshopWork work)
+        {
+            try
+            {
+                var b = work?.Building;
+                var req = work?.CurrentRequest;
+                if (b == null || req == null || req.Type == Gameplay.Buildings.CarWorkshopRequestType.Deconstruction)
+                    return true;
+                var g = GarageRef(b);
+                if (g == null || g.HasGarage)
+                    return true;
+                float now = UnityEngine.Time.realtimeSinceStartup;
+                if (now >= _nextGarageTry)
+                {
+                    _nextGarageTry = now + 5f;
+                    try { b.TryGenerateRandomGarage(); } catch { }
+                    if (g.HasGarage)
+                    {
+                        Plugin.Log.LogInfo($"IFZCOOP Werkstatt {b.ID}: Garage fehlte, neu angelegt");
+                        return true;
+                    }
+                }
+                if (now >= _nextGarageNotice)
+                {
+                    _nextGarageNotice = now + 60f;
+                    Plugin.Log.LogWarning($"IFZCOOP Werkstatt {b.ID}: Auto fertig, aber keine Garage – wartet");
+                    Plugin.Instance?.Session?.ShowNotice("Fahrzeugwerkstatt hat keine Garage: das fertige Auto wartet", 8f);
+                }
+                return false;
+            }
+            catch (System.Exception e)
+            {
+                Plugin.Log.LogDebug("Werkstatt ohne Garage: " + e.Message);
+                return true;
+            }
+        }
+
         public static void Apply(Harmony harmony)
         {
             Patch(harmony,
@@ -53,6 +99,11 @@ namespace IfzCoop
             Patch(harmony,
                 Find(typeof(GameOverController), nameof(GameOverController.PlayEndgameSequence), typeof(GameOverController.FailReason), typeof(Fraction)),
                 prefix: nameof(EndgamePrefix), postfix: nameof(EndgamePostfix));
+
+            // Fahrzeugwerkstatt ohne Garage: fertiges Auto nicht verlieren (sonst Absturz beim Ausliefern)
+            Patch(harmony,
+                Find(typeof(Gameplay.Units.Workers.CarWorkshopController), "HandleRequestCompleted", typeof(Gameplay.Research.CarWorkshopWork)),
+                prefix: nameof(CarDoneWithoutGaragePrefix));
 
             // Trupp-Befehle
             Patch(harmony,

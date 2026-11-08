@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -48,6 +48,7 @@ namespace IfzCoop.Sync
         {
             Production = 1,
             ShopBuild = 10, ShopModify = 11, ShopScrap = 12, ShopCancel = 13, ShopSelect = 14,
+            GaragePlace = 15, // Gast -> Host: long Werkstatt, Vector3 Ort, Vector3 Drehung (Host hat keine Garage)
             Customize = 20,
             Sawmill = 30, Handyman = 31,
         }
@@ -582,6 +583,22 @@ namespace IfzCoop.Sync
                         info += $" {bid} {vid} -> {ShopHandlerF(b).RequestsQueue.Count} Aufträge";
                         break;
                     }
+                    case Op.GaragePlace:
+                    {
+                        long bid = r.ReadInt64();
+                        var pos = new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
+                        var eul = new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle());
+                        var b = Bc?.GetBuildingById(bid);
+                        var g = b != null ? GarageF(b) : null;
+                        if (g == null || b.CarWorkshopWork == null) { Plugin.Log.LogWarning($"IFZCOOP Garage-Wunsch: keine Werkstatt {bid}"); return; }
+                        if (g.HasGarage) { info += $" {bid} schon da"; break; }
+                        g.SpawnGarage(pos, Quaternion.Euler(eul));
+                        g.TryStartOrder();
+                        GaragesPlaced++;
+                        Plugin.Log.LogInfo($"IFZCOOP Garage {bid} vom Gast übernommen ({pos.x:0},{pos.z:0})");
+                        info += $" {bid} übernommen";
+                        break;
+                    }
                     case Op.ShopCancel:
                     case Op.ShopSelect:
                     {
@@ -1065,11 +1082,33 @@ namespace IfzCoop.Sync
             catch (Exception e) { Plugin.Log.LogDebug("Produktion-Fenster: " + e.Message); }
         }
 
+        private readonly Dictionary<long, float> _garageSent = new Dictionary<long, float>();
+
         private void ApplyShop(Building b, ShopE e, bool fromHost)
         {
             var h = ShopHandlerF(b);
             if (h == null)
                 return;
+            // Der Gast hat die Werkstatt gebaut: seine Garage kennt nur er. Dem Host schicken, sonst kann der Host fertige
+            // Autos nicht ausliefern (Absturz in SpawnVehicleAfterCreation, Auto weg, nächstes bleibt bei 100 % hängen).
+            if (fromHost && IsGuest && !e.HasGarage && b.CarWorkshopWork != null)
+            {
+                var own = GarageF(b);
+                float now = Time.realtimeSinceStartup;
+                if (own != null && own.HasGarage && (!_garageSent.TryGetValue(b.ID, out var last) || now - last > 10f))
+                {
+                    _garageSent[b.ID] = now;
+                    var t = own.CurrentGarage.transform;
+                    var pos = t.position;
+                    var eul = t.eulerAngles;
+                    Send(Op.GaragePlace, w =>
+                    {
+                        w.Write(b.ID);
+                        w.Write(pos.x); w.Write(pos.y); w.Write(pos.z);
+                        w.Write(eul.x); w.Write(eul.y); w.Write(eul.z);
+                    });
+                }
+            }
             // Garage an der Stelle des Hosts (die eigene Würfel-Garage des Gastes wird ersetzt)
             var g = GarageF(b);
             if (g != null && e.HasGarage)
