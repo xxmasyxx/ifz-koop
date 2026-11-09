@@ -53,6 +53,11 @@ namespace IfzCoop
             TryPatch(harmony, typeof(GroupSpawnPointsController), "CustomUpdate", nameof(BlockWhenPuppet));
             TryPatch(harmony, typeof(HideoutsController), "CustomUpdate", nameof(BlockWhenPuppet));
             TryPatch(harmony, typeof(SwarmGroupsToLairConverter), "CustomUpdate", nameof(BlockWhenPuppet));
+            // Horde → Höhle nur beim Host. Beim Laden (SaveHandler.LoadingFinished → ConvertAfterGameLoaded) baute der Gast
+            // sonst eigene Höhlen mit eigener ID und eigener Zufallsgröße; die passten nie zu denen des Hosts
+            // (verschiedene Anzahl in der Höhle). Beim Laden ist der Gast noch nicht „im Spiel“, darum eigene Sperre.
+            TryPatch(harmony, typeof(SwarmGroupsToLairConverter), "TryConvertToLairInBuilding", nameof(BlockWhenGuest));
+            TryPatch(harmony, typeof(HideoutsController), "TryConvertToHideout", nameof(BlockWhenGuest));
             TryPatch(harmony, typeof(ImmigrantsSpawner), "CustomUpdate", nameof(BlockWhenPuppet));
             TryPatch(harmony, typeof(EmmigrantsController), "CustomUpdate", nameof(BlockWhenPuppet));
             TryPatch(harmony, typeof(MilitaryBackupController), "CustomUpdate", nameof(BlockWhenPuppet));
@@ -977,6 +982,17 @@ namespace IfzCoop
         {
             return !Puppet || UnitSync.NetApplying;
         }
+
+        // Sperrt beim Gast schon während des Ladens (BlockWhenPuppet greift erst „im Spiel“).
+        private static bool BlockWhenGuest()
+        {
+            var s = Plugin.Instance?.Session;
+            if (s == null || s.Role != Role.Guest || UnitSync.NetApplying)
+                return true;
+            GuestLairsBlocked++;
+            return false;
+        }
+        public static int GuestLairsBlocked { get; private set; }
 
         // Wie BlockWhenPuppet, aber auch während der Gast Host-Ereignisse nachspielt.
         private static bool BlockAlwaysWhenPuppet()

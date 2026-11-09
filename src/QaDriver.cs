@@ -1325,7 +1325,17 @@ namespace IfzCoop
                 var hideoutList = GameAccess.Game<Gameplay.Units.Enemy.Hideouts.HideoutsController>()?.Hideouts;
                 if (hideoutList != null)
                     foreach (var h in hideoutList) if (h != null && h.IsRevealed) revealed++;
-                sb.AppendLine($"hideoutsRevealed={revealed} hideoutsApplied={s.Hideouts.Applied} hideoutMembersAdded={s.Hideouts.MembersAdded} hideoutMembersRemoved={s.Hideouts.MembersRemoved} hideoutsCreated={s.Hideouts.HideoutsCreated}");
+                sb.AppendLine($"hideoutsRevealed={revealed} hideoutsApplied={s.Hideouts.Applied} hideoutMembersAdded={s.Hideouts.MembersAdded} hideoutMembersRemoved={s.Hideouts.MembersRemoved} hideoutsCreated={s.Hideouts.HideoutsCreated} guestLairsBlocked={UnitPatches.GuestLairsBlocked} hideoutsGuestOnly={s.Hideouts.GuestOnly}");
+                if (hideoutList != null)
+                {
+                    // zum Vergleich Host/Gast: ID@Gebäude:Anzahl in der Hauptgruppe
+                    var hl = new System.Collections.Generic.List<string>();
+                    foreach (var h in hideoutList)
+                        if (h != null && h.Building != null)
+                            hl.Add($"{h.Id}@{h.Building.ID}:{(h.MainGroup != null ? h.MainGroup.Characters.Count : -1)}");
+                    hl.Sort(StringComparer.Ordinal);
+                    sb.AppendLine($"hideouts n={hl.Count} {string.Join(" ", hl)}");
+                }
                 foreach (var remote in s.Presence.Remotes)
                     sb.AppendLine($"remote {remote.Name} squads={string.Join(",", remote.Squads)} building={remote.Building}");
                 var virtuals = GameAccess.Game<Gameplay.Units.Enemy.VirtualGroupsController>()?.Groups;

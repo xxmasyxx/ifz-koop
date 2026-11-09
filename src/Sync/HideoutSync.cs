@@ -39,7 +39,7 @@ namespace IfzCoop.Sync
 
         public void ResendAll() { _sent.Clear(); _countSig = null; }
 
-        public void Reset() { _sent.Clear(); _countSig = null; _pending.Clear(); _requested.Clear(); _createFailLogged.Clear(); }
+        public void Reset() { _sent.Clear(); _countSig = null; _pending.Clear(); _requested.Clear(); _createFailLogged.Clear(); _guestOnlyLogged.Clear(); GuestOnly = 0; }
 
         // ================================================================ Anzahl in der Höhle
         // Die Hauptgruppe einer Höhle wächst beim Host (Hideout.TryAddMainGroupMember); beim Gast ist HideoutsController.CustomUpdate
@@ -110,10 +110,22 @@ namespace IfzCoop.Sync
             if (hideouts == null)
                 return;
             RequestMissing(hc, host.Keys);
+            int guestOnly = 0;
             foreach (var h in hideouts)
             {
-                if (h == null || string.IsNullOrEmpty(h.Id) || !host.TryGetValue(h.Id, out var want))
+                if (h == null || string.IsNullOrEmpty(h.Id))
                     continue;
+                if (!host.TryGetValue(h.Id, out var want))
+                {
+                    // Höhle nur beim Gast (der Host meldet nur Höhlen mit Hauptgruppe; eine leere zählt hier nicht)
+                    if (h.MainGroup != null && !h.MainGroup.IsEmpty())
+                    {
+                        guestOnly++;
+                        if (_guestOnlyLogged.Add(h.Id))
+                            Plugin.Log.LogWarning($"IFZCOOP Höhle {h.Id} in Gebäude {h.Building?.ID} gibt es nur beim Gast ({AliveCount(h.MainGroup)} drin)");
+                    }
+                    continue;
+                }
                 var g = h.MainGroup;
                 if (g == null || g.IsEmpty() || g.Id != want.group)
                 {
@@ -149,7 +161,11 @@ namespace IfzCoop.Sync
                     UnitSync.NetApplying = false;
                 }
             }
+            GuestOnly = guestOnly;
         }
+
+        private readonly HashSet<string> _guestOnlyLogged = new HashSet<string>();
+        public int GuestOnly { get; private set; }
 
         // ================================================================ fehlende Verstecke
         // Verstecke, die beim Host erst im Spiel entstehen (z. B. eine Horde wird zur Höhle, HideoutsController.TryConvertToHideout),
