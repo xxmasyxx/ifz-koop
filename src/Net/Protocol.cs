@@ -57,6 +57,7 @@ namespace IfzCoop.Net
         // Gebäude
         ScavengeState = 33,     // Host -> Gast: int n, n × (long buildingId, float timeTotal, float timeLeft)
         HideoutRevealed = 34,   // Host -> Gast: int n, n × string hideoutId
+        HideoutCount = 83,      // Host -> Gast: ushort n, n × (string hideoutId, string Hauptgruppe, ushort lebende Mitglieder)
         StockState = 35,        // Host -> Gast: Lager (Container, VirtualResourcesContainer, Haltbarkeit Nahrung/Fleisch/Leichen)
         ContainerState = 36,    // Host -> Gast: n × (byte Art Trupp/Kofferraum/Haus, string id, int Kapazität, Rohstoffe, gesperrte)
         ItemsState = 37,        // Host -> Gast: n × (string characterId, int Waffe, int Schutz, float Schutz-Anteil, float Munition)

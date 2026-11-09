@@ -1573,6 +1573,11 @@ namespace IfzCoop
                         Hideouts.GuestOnRevealed(r);
                     break;
 
+                case Msg.HideoutCount:
+                    if (GuestState == GuestState.InGame)
+                        Hideouts.GuestOnCount(r);
+                    break;
+
                 case Msg.StockState:
                     if (GuestState == GuestState.InGame)
                         Stock.GuestOnState(r);

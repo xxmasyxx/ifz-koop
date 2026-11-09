@@ -1325,7 +1325,7 @@ namespace IfzCoop
                 var hideoutList = GameAccess.Game<Gameplay.Units.Enemy.Hideouts.HideoutsController>()?.Hideouts;
                 if (hideoutList != null)
                     foreach (var h in hideoutList) if (h != null && h.IsRevealed) revealed++;
-                sb.AppendLine($"hideoutsRevealed={revealed} hideoutsApplied={s.Hideouts.Applied}");
+                sb.AppendLine($"hideoutsRevealed={revealed} hideoutsApplied={s.Hideouts.Applied} hideoutMembersAdded={s.Hideouts.MembersAdded} hideoutMembersRemoved={s.Hideouts.MembersRemoved}");
                 foreach (var remote in s.Presence.Remotes)
                     sb.AppendLine($"remote {remote.Name} squads={string.Join(",", remote.Squads)} building={remote.Building}");
                 var virtuals = GameAccess.Game<Gameplay.Units.Enemy.VirtualGroupsController>()?.Groups;
