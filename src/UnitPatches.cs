@@ -281,6 +281,7 @@ namespace IfzCoop
                 new[] { typeof(System.Collections.Generic.List<Gameplay.Units.Orders.OrderLine>) }, nameof(SvNextPathsPrefix), null);
             // Ereignis-Marker beim Gast nur vom Host, Ausloeser nur beim Host (markers, EventSync)
             EventSync.ApplyPatches(harmony);
+            CrashGuard.ApplyPatches(harmony);
             // Haus des Mitspielers mit dem Original-Umriss des Spiels (markers, PresenceOutline)
             PresenceOutline.ApplyPatches(harmony);
             // Tages-Statistik der Rohstoffe (Tooltip der Rohstoffleiste) kommt vom Host (ResStatsSync): beim Gast

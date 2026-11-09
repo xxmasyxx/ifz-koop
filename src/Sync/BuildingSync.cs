@@ -986,6 +986,8 @@ namespace IfzCoop.Sync
             if (b.IsHq && IsIdle(want))
                 return; // HQ kommt über HqSync
 
+            if (want == StructureStateType.Hideout || want == StructureStateType.NpcZoneDefault || want == StructureStateType.NpcZoneHostile)
+                return; // eigene Wege (HideoutSync, ZoneSync) – nicht erzwingen und nicht alle paar Sekunden ins Log
             Plugin.Log.LogInfo($"IFZCOOP building {b.ID} {have} -> {want} {e.Draft}");
             bool endRepair = have == StructureStateType.Repairing && b.RepairWork != null;
             bool endExtra = have == StructureStateType.ExtraAdapting && b.ExtraAdaptationWork != null;

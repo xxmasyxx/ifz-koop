@@ -693,7 +693,39 @@ namespace IfzCoop.Sync
             P(typeof(EventMarker), "SetVisible", nameof(SetVisiblePrefix));
             P(typeof(EventTriggerManager), "RunEventByTrigger", nameof(TriggerPrefix));
             P(typeof(EventTriggerManager), "HandleTriggerEventWithMarker", nameof(TriggerPrefix));
+            P(typeof(global::UI.DistancePointer.DistancePointerCanvas), "Update", nameof(PointerCanvasPrefix));
             Plugin.Log.LogInfo($"Marker-Abgleich: {ok} Haken gesetzt, {missing} fehlen");
+        }
+
+        private static readonly AccessTools.FieldRef<global::UI.DistancePointer.DistancePointerCanvas, global::Controllers.DistancePointerController> PointerCtrlField =
+            AccessTools.FieldRefAccess<global::UI.DistancePointer.DistancePointerCanvas, global::Controllers.DistancePointerController>("_distancePointerController");
+
+        public static int PointersPruned { get; private set; }
+
+        /// <summary>
+        /// DistancePointerCanvas.Update – Prefix: Pfeile am Bildschirmrand zu Markern, deren Objekt schon zerstört ist, aus der Liste
+        /// nehmen. Verschwindet ein Marker ohne ForceDestroy (z. B. mit seinem Haus oder seiner Gruppe), bleibt sein Pfeil in
+        /// DistancePointerController.PointerAims, und das Spiel wirft beim Gast jedes Bild eine NullReferenceException
+        /// (Player.log: DistancePointerController.CountAimDirection, Berichte 2026-11-09).
+        /// </summary>
+        private static void PointerCanvasPrefix(global::UI.DistancePointer.DistancePointerCanvas __instance)
+        {
+            try
+            {
+                var list = PointerCtrlField(__instance)?.PointerAims;
+                if (list == null)
+                    return;
+                for (int i = list.Count - 1; i >= 0; i--)
+                {
+                    var p = list[i];
+                    if (p != null && p.cachedTransform != null && p.cachedGameObject != null)
+                        continue;
+                    list.RemoveAt(i);
+                    if (PointersPruned++ < 5)
+                        Plugin.Log.LogInfo("IFZCOOP Randpfeil ohne Marker entfernt");
+                }
+            }
+            catch { }
         }
 
         // ================================================================ QA

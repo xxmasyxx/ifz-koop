@@ -1161,6 +1161,11 @@ namespace IfzCoop
                         Checksums.HostOnChecksum(peer, r);
                     break;
 
+                case Msg.HideoutRequest:
+                    if (!peer.AwaitingLoad)
+                        Hideouts.HostOnRequest(peer, r);
+                    break;
+
                 case Msg.BugReportPart:
                     BugReport.HostOnPart(peer.Name, r);
                     break;
@@ -1581,6 +1586,11 @@ namespace IfzCoop
                 case Msg.HideoutCount:
                     if (GuestState == GuestState.InGame)
                         Hideouts.GuestOnCount(r);
+                    break;
+
+                case Msg.HideoutInfo:
+                    if (GuestState == GuestState.InGame)
+                        Hideouts.GuestOnInfo(r);
                     break;
 
                 case Msg.StockState:

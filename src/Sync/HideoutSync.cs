@@ -7,7 +7,9 @@ using Gameplay.Units.Enemy.Hideouts;
 using HarmonyLib;
 using IfzCoop.Game;
 using IfzCoop.Net;
+using Newtonsoft.Json;
 using UnityEngine;
+using GameJson = Utilities.JsonSerializer;
 
 namespace IfzCoop.Sync
 {
@@ -37,7 +39,7 @@ namespace IfzCoop.Sync
 
         public void ResendAll() { _sent.Clear(); _countSig = null; }
 
-        public void Reset() { _sent.Clear(); _countSig = null; _pending.Clear(); }
+        public void Reset() { _sent.Clear(); _countSig = null; _pending.Clear(); _requested.Clear(); _createFailLogged.Clear(); }
 
         // ================================================================ Anzahl in der Höhle
         // Die Hauptgruppe einer Höhle wächst beim Host (Hideout.TryAddMainGroupMember); beim Gast ist HideoutsController.CustomUpdate
@@ -107,6 +109,7 @@ namespace IfzCoop.Sync
             var hideouts = hc?.Hideouts;
             if (hideouts == null)
                 return;
+            RequestMissing(hc, host.Keys);
             foreach (var h in hideouts)
             {
                 if (h == null || string.IsNullOrEmpty(h.Id) || !host.TryGetValue(h.Id, out var want))
@@ -140,6 +143,117 @@ namespace IfzCoop.Sync
                 catch (Exception e)
                 {
                     Plugin.Log.LogWarning($"Höhle {h.Id} angleichen: {e.Message}");
+                }
+                finally
+                {
+                    UnitSync.NetApplying = false;
+                }
+            }
+        }
+
+        // ================================================================ fehlende Verstecke
+        // Verstecke, die beim Host erst im Spiel entstehen (z. B. eine Horde wird zur Höhle, HideoutsController.TryConvertToHideout),
+        // gibt es beim Gast nicht: dort ist HideoutsController.CustomUpdate gesperrt. Folge: beim Gast bleibt das Haus „verlassen“,
+        // keine Höhle, keine Anzeige (Log „building … Abandoned -> Hideout“ alle paar Sekunden, Bericht 2026-11-09).
+        // Der Gast fragt fehlende IDs an, der Host schickt sie wie im Spielstand (HideoutSerializedInfo), der Gast legt sie an.
+
+        private const float RequestCooldown = 15f;
+        private readonly Dictionary<string, float> _requested = new Dictionary<string, float>();
+        private readonly HashSet<string> _createFailLogged = new HashSet<string>();
+        public int HideoutsCreated { get; private set; }
+
+        private void RequestMissing(HideoutsController hc, IEnumerable<string> hostIds)
+        {
+            float now = Time.realtimeSinceStartup;
+            var missing = new List<string>();
+            foreach (var id in hostIds)
+            {
+                if (string.IsNullOrEmpty(id) || (hc.TryGetHideout(id, out var have) && have != null))
+                    continue;
+                if (_requested.TryGetValue(id, out var last) && now - last < RequestCooldown)
+                    continue;
+                _requested[id] = now;
+                missing.Add(id);
+                if (missing.Count >= 20)
+                    break;
+            }
+            if (missing.Count == 0)
+                return;
+            _session.SendToHost(Protocol.Build(Msg.HideoutRequest, w =>
+            {
+                w.Write((ushort)missing.Count);
+                foreach (var id in missing) w.Write(id);
+            }));
+        }
+
+        public void HostOnRequest(Peer from, BinaryReader r)
+        {
+            int n = r.ReadUInt16();
+            if (n > 100)
+                return;
+            var hc = GameAccess.Game<HideoutsController>();
+            var jsons = new List<string>();
+            for (int i = 0; i < n; i++)
+            {
+                string id = r.ReadString();
+                if (hc == null || !hc.TryGetHideout(id, out var h) || h == null || h.Building == null)
+                    continue;
+                try { jsons.Add(JsonConvert.SerializeObject(new HideoutSerializedInfo(h), GameJson.DefaultSettings)); }
+                catch (Exception e) { Plugin.Log.LogWarning($"Versteck {id} verpacken: {e.Message}"); }
+            }
+            if (jsons.Count == 0)
+                return;
+            _session.SendTo(from.Id, Protocol.Build(Msg.HideoutInfo, w =>
+            {
+                w.Write((ushort)jsons.Count);
+                foreach (var j in jsons) w.Write(j);
+            }));
+        }
+
+        public void GuestOnInfo(BinaryReader r)
+        {
+            int n = r.ReadUInt16();
+            var hc = GameAccess.Game<HideoutsController>();
+            var bc = GameAccess.Game<global::Controllers.BuildingsController>();
+            for (int i = 0; i < n; i++)
+            {
+                string json = r.ReadString();
+                if (hc == null || bc == null)
+                    continue;
+                HideoutSerializedInfo info;
+                try { info = JsonConvert.DeserializeObject<HideoutSerializedInfo>(json, GameJson.DefaultSettings); }
+                catch (Exception e) { Plugin.Log.LogWarning("Versteck nicht lesbar: " + e.Message); continue; }
+                if (info == null || string.IsNullOrEmpty(info.Id))
+                    continue;
+                if (hc.TryGetHideout(info.Id, out var have) && have != null)
+                    continue;
+                // Vorher selbst prüfen: scheitert die Prüfung im Spiel (ValidateSerializedInfo), löscht es die Gruppen des Verstecks
+                var b = bc.GetBuildingById(info.OccupiedBuildingId);
+                string why = b == null ? "Gebäude fehlt"
+                    : !hc.IsBuildingValid(b) ? "Gebäude ungeeignet"
+                    : b.Hideout != null ? "Gebäude hat schon ein Versteck"
+                    : !string.IsNullOrEmpty(info.MainGroupId) && UnitSync.FindGroupPublic(info.MainGroupId) == null ? "Hauptgruppe noch nicht da"
+                    : null;
+                if (why != null)
+                {
+                    if (_createFailLogged.Add(info.Id + why))
+                        Plugin.Log.LogInfo($"IFZCOOP Versteck {info.Id} noch nicht anlegbar: {why}");
+                    continue; // nächste Anfrage in 15 s
+                }
+                UnitSync.NetApplying = true;
+                try
+                {
+                    var h = hc.CreateHideout(info);
+                    if (h != null)
+                    {
+                        HideoutsCreated++;
+                        _requested.Remove(info.Id);
+                        Plugin.Log.LogInfo($"IFZCOOP Versteck {info.Id} in Gebäude {b.ID} angelegt (beim Host neu entstanden)");
+                    }
+                }
+                catch (Exception e)
+                {
+                    Plugin.Log.LogWarning($"Versteck {info.Id} anlegen: {e.Message}");
                 }
                 finally
                 {

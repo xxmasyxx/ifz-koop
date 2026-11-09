@@ -626,6 +626,8 @@ namespace IfzCoop.Sync
             _session.SendToHost(Protocol.Build(Msg.GroupSpawnRequest, w => w.Write(id)));
         }
 
+        private static int _killErrorsLogged;
+
         private void KillCharacter(Character c, GroupMap map)
         {
             if (c == null)
@@ -643,7 +645,9 @@ namespace IfzCoop.Sync
             }
             catch (Exception e)
             {
-                Plugin.Log.LogWarning("Figur sterben lassen: " + e.Message);
+                // einmal mit Aufrufkette, damit sich die Ursache im Fehlerbericht finden lässt
+                if (_killErrorsLogged++ == 0) Plugin.Log.LogWarning("Figur sterben lassen: " + e);
+                else Plugin.Log.LogWarning("Figur sterben lassen: " + e.Message);
             }
             finally
             {
