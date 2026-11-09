@@ -1245,6 +1245,7 @@ namespace IfzCoop
                 foreach (var line in Sync.ExpeditionSync.StatusLines())
                     sb.AppendLine(line);
                 sb.AppendLine(s.Expeditions.StatusLine());
+                sb.AppendLine(Sync.ExpeditionRange.StatusLine());
                 foreach (var line in Sync.TraderSync.StatusLines())
                     sb.AppendLine(line);
                 sb.AppendLine(s.Traders.StatusLine());

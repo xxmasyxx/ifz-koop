@@ -548,7 +548,10 @@ namespace IfzCoop
                 UpdateGuest(now);
 
             if (Role != Role.None)
+            {
                 Presence.Update();
+                Sync.ExpeditionRange.Tick();
+            }
             if (Role == Role.Host)
             {
                 Units.HostUpdate();
