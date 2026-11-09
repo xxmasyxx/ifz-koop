@@ -111,7 +111,7 @@ namespace IfzCoop
             ("Nahkampf", ResourceID.eq_basic_melee_weapon), ("Stangenwaffe", ResourceID.eq_polearm), ("Pistole", ResourceID.eq_pistol),
             ("Schrotflinte", ResourceID.eq_shotgun), ("Sturmgewehr", ResourceID.eq_assault_rifle), ("Scharfschützengewehr", ResourceID.eq_sniper_rifle),
             ("Bogen", ResourceID.eq_bow), ("Armbrust", ResourceID.eq_crossbow), ("Flammenwerfer", ResourceID.eq_flamethrower),
-            ("Mörser", ResourceID.eq_mortar),
+            ("Mörser", ResourceID.eq_mortar), ("Schweres MG", ResourceID.eq_hcal),
         };
 
         private static readonly (string label, ResourceID id)[] Armor =
