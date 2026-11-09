@@ -987,9 +987,12 @@ namespace IfzCoop.Sync
                 return; // HQ kommt über HqSync
 
             Plugin.Log.LogInfo($"IFZCOOP building {b.ID} {have} -> {want} {e.Draft}");
-            if (have == StructureStateType.Repairing && b.RepairWork != null)
+            bool endRepair = have == StructureStateType.Repairing && b.RepairWork != null;
+            bool endExtra = have == StructureStateType.ExtraAdapting && b.ExtraAdaptationWork != null;
+            if (endRepair || endExtra)
             {
-                EndRepairLikeGame(b, want);
+                if (endRepair) EndRepairLikeGame(b, want);
+                else EndExtraAdaptLikeGame(b);
                 have = StateOf(b);
                 if (have == want)
                 {
@@ -1099,6 +1102,18 @@ namespace IfzCoop.Sync
             {
                 Plugin.Log.LogWarning($"Reparatur beenden: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Erweiterung beim Gast beenden wie das Spiel. Gleiche Falle wie bei der Reparatur: BuildingExtraAdaptingState.Exit
+        /// löscht die Erweiterungs-Arbeit, deren Ende-Ereignis (HandleExtraAdaptationEnd) wechselt schon nach Fertig, danach
+        /// betritt ein direktes ChangeTo Fertig ein zweites Mal: doppelte Produktion/Sammeln/Verteidigung („#1“).
+        /// Hier also nur die Arbeit löschen, das Spiel wechselt selbst nach Fertig.
+        /// </summary>
+        internal static void EndExtraAdaptLikeGame(Building b)
+        {
+            try { b.ExtraAdaptationWork?.DeleteWork(); }
+            catch (Exception ex) { Plugin.Log.LogWarning($"Erweiterung beenden: {ex.Message}"); }
         }
 
         /// <summary>Spiel-Zustände öffnen beim Betreten oft das Fenster des Hauses (ShowProperInfoPanel). Beim Gast nur dann
