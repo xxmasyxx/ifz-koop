@@ -1025,6 +1025,13 @@ namespace IfzCoop.Sync
         private bool Transition(PlaceableStructure s, StructureStateType have, StructureStateType want)
         {
             var sm = s.StateMachine;
+            if (have == StructureStateType.Repairing && want != have && s.RepairWork != null)
+            {
+                BuildingSync.EndRepairLikeGame(s, want); // sonst doppelte Verteidigungsarbeit (siehe dort)
+                have = StateOf(s);
+                if (have == want)
+                    return true;
+            }
             switch (want)
             {
                 case StructureStateType.Completed:

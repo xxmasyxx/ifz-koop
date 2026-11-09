@@ -987,6 +987,18 @@ namespace IfzCoop.Sync
                 return; // HQ kommt über HqSync
 
             Plugin.Log.LogInfo($"IFZCOOP building {b.ID} {have} -> {want} {e.Draft}");
+            if (have == StructureStateType.Repairing && b.RepairWork != null)
+            {
+                EndRepairLikeGame(b, want);
+                have = StateOf(b);
+                if (have == want)
+                {
+                    if (want == StructureStateType.Completed)
+                        ApplyHeight(b, e);
+                    Applied++;
+                    return;
+                }
+            }
             switch (want)
             {
                 case StructureStateType.Constructing:
@@ -1061,6 +1073,32 @@ namespace IfzCoop.Sync
                     break;
             }
             Applied++;
+        }
+
+        /// <summary>
+        /// Reparatur beim Gast beenden wie das Spiel (RepairingState.HandleRepairEnd wechselt selbst nach Fertig oder Ruine).
+        /// Ein direktes ChangeTo aus dem Reparatur-Zustand löscht in Exit die Reparatur, deren Ende-Ereignis wechselt schon nach
+        /// Fertig, danach betritt ChangeTo Fertig ein zweites Mal: doppelte Produktions-/Verteidigungsarbeit
+        /// (Bericht 2026-11-09: Dosenfabrik beim Gast mit zweiter Produktion „#1“, 2 statt 1 Arbeiter).
+        /// </summary>
+        internal static void EndRepairLikeGame(Structure s, StructureStateType want)
+        {
+            try
+            {
+                var h = s.Health;
+                if (h != null)
+                {
+                    if (want == StructureStateType.Completed && h.Hp < 0.5f)
+                        h.SetHp(h.MaxHp);
+                    else if (want == StructureStateType.Ruined && h.Hp >= 0.5f)
+                        h.SetHp(0f);
+                }
+                s.RepairWork?.DeleteWork();
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogWarning($"Reparatur beenden: {ex.Message}");
+            }
         }
 
         /// <summary>Spiel-Zustände öffnen beim Betreten oft das Fenster des Hauses (ShowProperInfoPanel). Beim Gast nur dann
