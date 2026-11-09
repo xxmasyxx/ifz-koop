@@ -1326,6 +1326,11 @@ namespace IfzCoop
             _transport.Close(id);
             Status = $"{peer.Name} {reason}";
             Plugin.Log.LogInfo($"IFZCOOP guest left: {peer.Name} ({reason})");
+            // Meldung oben für den Host und alle übrigen Gäste (Wunsch 2026-11-09)
+            string text = $"{peer.Name} {reason}";
+            ShowNotice(text, 10f);
+            try { BroadcastToGuests(Protocol.Build(Msg.Notice, w => w.Write(text))); }
+            catch (Exception e) { Plugin.Log.LogWarning("Abgangsmeldung senden: " + e.Message); }
         }
 
         /// <summary>Vom Postfix auf SetSpeedMultiplier: Host verteilt jede Tempoänderung.</summary>
@@ -1931,6 +1936,7 @@ namespace IfzCoop
         /// </param>
         public void Leave(string reason = "beendet", bool sendBye = true, bool backToMenu = true)
         {
+            bool wasGuest = Role == Role.Guest;
             bool guestToMenu = backToMenu && Role == Role.Guest
                                && (GuestState == GuestState.InGame || GuestState == GuestState.Loading);
             if (sendBye)
@@ -1954,6 +1960,9 @@ namespace IfzCoop
             UseSteam();
             Reset(reason);
             Plugin.Log.LogInfo("IFZCOOP session ended: " + reason);
+
+            if (!guestToMenu && wasGuest && !sendBye && backToMenu)
+                ShowNotice("Koop beendet: " + reason, 10f); // Host weg, Gast war noch nicht im Spiel (z. B. Lobby)
 
             if (guestToMenu)
             {
